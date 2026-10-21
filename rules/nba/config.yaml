@@ -1,0 +1,519 @@
+# Bethero NBA configuration. Rules that read these keys: rules/nba/RULES.md (cited as cfg:section.key).
+#
+# Every setting carries `value`, `status`, `source`; UNVALIDATED settings also carry `rationale`.
+# Status labels (RULES.md §0.1):
+#   CONFIRMED    stated by Eric or visible in his screenshot; source names the date
+#   CONFIRM      Eric decides; the value shown is the stricter default until he does
+#   VALIDATED    evidence recorded in rules/nba/VALIDATION.md
+#   UNVALIDATED  placeholder; may only make a gate stricter, never the reason a bet exists
+#   UNCONFIRMED  platform semantics pending -> NB-FORMAT / NB-SETTLEMENT
+#   FACT         external fact; source in RULES.md Appendix A
+#   RULE         design choice defined in RULES.md
+# Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
+
+meta:
+  version: 0.1.0
+  updated: 2026-10-21
+  rules: rules/nba/RULES.md
+  changelog: rules/nba/CHANGELOG.md
+
+mode:
+  value: shadow
+  status: CONFIRM
+  source: "RULES R-12.7: stakes are logged as shadow until Eric's explicit go-live message"
+
+time:
+  store_tz: {value: UTC, status: RULE, source: "brief; RULES R-4.1"}
+  display_tz: {value: Asia/Taipei, status: RULE, source: "brief; RULES R-4.1"}
+  slate_tz: {value: America/New_York, status: RULE, source: "MLB src/mlbline/odds.py eastern_date; RULES R-4.1"}
+
+data_access:
+  live_requests:
+    value: opt_in
+    status: RULE
+    source: "RULES R-4.7 (replaces the brief's pilot.py, which does not exist)"
+  min_interval_s:
+    value: 1.0
+    status: RULE
+    source: "Codex-NPB src/codex_npb/sources/npb_official.py delay_seconds"
+  user_agent:
+    value: "bethero-nba/0.1 (+https://github.com/GizzyJeans/NBA-bet)"
+    status: RULE
+    source: "Eric 2026-10-21 asked why an email is needed; the repository URL identifies the client instead"
+  cache_raw_responses:
+    value: true
+    status: RULE
+    source: "RULES R-4.7"
+
+platform:
+  same_as_baseball:
+    value: true
+    status: CONFIRMED
+    source: "Eric 2026-10-21: 1,2,3 同個平台"
+  data_source:
+    value: eric_screenshots
+    status: CONFIRMED
+    source: "Eric 2026-10-21: 一律以我貼給你的截圖為準"
+  automated_access:
+    value: false
+    status: CONFIRMED
+    source: "Eric 2026-10-21 (screenshots only); brief: never automate platform access"
+  odds_format:
+    value: HK
+    status: CONFIRMED
+    source: "Eric 2026-10-21 screenshot: moneyline 0.56 / 1.4 fits only Hong Kong odds"
+  markets_v1:
+    value: [handicap, total, moneyline]
+    status: RULE
+    source: "brief 1.1; the screenshot shows 獨贏 / 讓分 / 大小"
+  settles_overtime:
+    value: true
+    status: CONFIRMED
+    source: "Eric 2026-10-21: 含延長"
+  notation:
+    half_line:
+      value: win_or_lose
+      status: CONFIRMED
+      source: "integer scores cannot land on .5"
+    flat_line:
+      value: push_at_N
+      status: CONFIRMED
+      source: "same platform; Codex-NPB tests/test_platform_rules.py, confirmed by the platform 2026-08-26"
+    tail_line:
+      value: null
+      status: UNCONFIRMED
+      source: "conflict: same-platform NPB rule settles partially at exactly N; Eric 2026-10-21: 沒有部份輸贏"
+    bare_integer:
+      value: null
+      status: UNCONFIRMED
+      source: "not seen on the NBA board"
+    single_digit_tail:
+      value: reject
+      status: RULE
+      source: "Codex-NPB src/codex_npb/model.py parse_tail_line"
+  postponement:
+    value: void_pending
+    status: CONFIRMED
+    source: "Eric 2026-10-21: 不會延期中斷，沒有特殊規則; handling in RULES R-3.7"
+  platform_bet_limit:
+    value: none
+    status: CONFIRMED
+    source: "Eric 2026-10-21: 無上限 (read as the platform's limit; Bethero caps are under risk)"
+  min_stake:
+    value: 100
+    status: CONFIRM
+    source: "assumed; not stated by Eric"
+  stake_increment:
+    value: 100
+    status: CONFIRM
+    source: "assumed; not stated by Eric"
+  observed_prices:
+    value: {handicap: 0.95, total: 0.94}
+    status: CONFIRMED
+    source: "Eric screenshot 2026-10-21, 2 games; informational only (RULES R-3.6)"
+
+risk:
+  bankroll:
+    value: 100000
+    status: CONFIRMED
+    source: "Eric 2026-10-21: 本金10萬，與棒球分開"
+  kelly_fraction:
+    value: 0.25
+    status: CONFIRM
+    source: "brief: mirror the NPB profile (cc_npb bethero/bankroll.py)"
+  max_bet_pct:
+    value: 0.01
+    status: CONFIRM
+    source: "NPB profile; Eric's 無上限 read as the platform's limit, so the cap stays (stricter) until Eric says otherwise"
+  daily_cap_pct:
+    value: 0.05
+    status: CONFIRM
+    source: "MLB/NPB profile; same reading of 無上限"
+  per_game_cap_pct:
+    value: 0.01
+    status: UNVALIDATED
+    source: "brief"
+    rationale: "one cap covers 讓分 or 獨贏 plus 大小 on a game until their correlation is estimated"
+  daily_cap_basis:
+    value: us_eastern_slate_date
+    status: RULE
+    source: "RULES R-12.5"
+  allocation_order:
+    value: ev_lower_bound_desc
+    status: RULE
+    source: "RULES R-12.5"
+  one_side_market_per_game:
+    value: true
+    status: RULE
+    source: "RULES R-12.4 G11: 讓分 and 獨贏 on one game are near-duplicates"
+
+gates:
+  min_ev:
+    value: 0.04
+    status: CONFIRM
+    source: "NPB profile (cc_npb bethero/gates.py MIN_EV)"
+  ev_noise_z:
+    value: 1.0
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "rejects edges within one sigma of zero; stricter than the NPB profile, which has no noise gate"
+  min_divergence_pp:
+    value: 3.0
+    status: CONFIRM
+    source: "NPB profile; implied by min_ev when the platform's two prices are equal (RULES R-12.4)"
+  tier_a_book_agreement_min:
+    value: 0.75
+    status: UNVALIDATED
+    source: "MLB docs/gate_2b.md BOOK_AGREEMENT"
+    rationale: "an edge must not rest on a few outlying books"
+
+anchor:
+  source:
+    value: the_odds_api_v4
+    status: RULE
+    source: "MLB src/mlbline/odds.py; reachable from this environment 2026-10-21"
+  sport_key:
+    value: basketball_nba
+    status: RULE
+    source: "The Odds API sport key"
+  regions:
+    value: [us]
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "MLB used us,us2; one region halves the credit cost to fit the free tier (Eric: free data only); revisit if us returns too few books"
+  markets:
+    value: [h2h, spreads, totals]
+    status: RULE
+    source: "MLB src/mlbline/odds.py"
+  devig_methods:
+    value: [multiplicative, power, shin]
+    status: RULE
+    source: "brief 1.2; Shin rewritten (RULES R-5.2)"
+  devig_gate_mode:
+    value: worst_case
+    status: RULE
+    source: "MLB docs/gate_2b.md: the edge must hold under every method"
+  devig_display_method:
+    value: shin
+    status: UNVALIDATED
+    source: "MLB default, implemented correctly here"
+    rationale: "display only; Phase 3 picks the default by calibration on closing data"
+  consensus_statistic:
+    value: median
+    status: RULE
+    source: "MLB src/mlbline/market.py summarise_line"
+  sharp_weighting:
+    value: none
+    status: RULE
+    source: "RULES R-5.4"
+  consensus_min_books:
+    value: 8
+    status: UNVALIDATED
+    source: "MLB docs/gate_2b.md MIN_BOOKS"
+    rationale: "gate 2B precedent; check against region us's real book count in the first week of snapshots"
+  consensus_translate_max_gap:
+    value: {spread: 1.0, total: 1.0}
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "only books within one point of the modal line are converted; translation error grows with distance"
+  us_quote_max_age_min:
+    value: 30
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "stricter than MLB's 45 minutes (src/mlbline/market.py STALE_AFTER_SECONDS)"
+  ml_spread_max_gap_pts:
+    value: 1.5
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "data flag only, can only block; Phase 3 sets it from the holdout gap between moneyline- and spread-implied margins"
+  consensus_consistency_max_pp:
+    value: 2.0
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "a Tier A line's own consensus against the fitted distribution; larger gaps flag NB-DATA"
+
+us_odds:
+  monthly_credit_budget:
+    value: 500
+    status: CONFIRM
+    source: "The Odds API free tier as described by third parties (RULES Appendix B); Eric's plan not stated"
+  max_calls_per_day:
+    value: 4
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "about 2 analysis pulls and 2 close pulls; 4 pulls x 3 credits x 30 days = 360 of 500"
+  min_remaining_reserve:
+    value: 50
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "keeps credits for score pulls at month end"
+
+snapshots:
+  snapshot_max_skew_min:
+    value: 20
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "about one injury-report refresh plus fetch latency; Phase 3 checks how often the US consensus moves 0.5 pt or more inside this window"
+  close_snapshot_window_min:
+    value: 15
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "the last US pull this close to tip counts as the close for CLV"
+  injury_report_max_age_min:
+    value: 30
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "statuses change through game day; an older report is stale"
+  require_gameday_report:
+    value: true
+    status: RULE
+    source: "brief 1.6; RULES R-4.5"
+  require_referee_assignments:
+    value: true
+    status: RULE
+    source: "brief 1.6; RULES R-4.5"
+
+tiers:
+  tier_a_min_books:
+    value: 8
+    status: UNVALIDATED
+    source: "MLB docs/gate_2b.md MIN_BOOKS"
+    rationale: "same bar as consensus_min_books"
+  tier_b_max_gap:
+    value: {spread: 1.5, total: 2.0}
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "one point plus half a point for integer US lines, wider for totals because their distribution is wider; Tier B stays off until the distribution is VALIDATED, and Phase 3 replaces this with the largest gap whose holdout calibration error stays within the de-vig method spread"
+  sanity_gap:
+    value: {spread: 3.0, total: 6.0}
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "a synchronized gap this large is more likely a stale screenshot, a misread or unpriced news than an edge; can only block"
+  direction_check_min_pts:
+    value: 1.0
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "below one point either team can legitimately be the favourite"
+  rounding_max_pts:
+    value: {spread: 1.0, total: 1.5}
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "label only (ROUNDING vs UNEXPLAINED); affects confidence, never stake"
+
+distribution:
+  status:
+    value: UNAVAILABLE
+    status: RULE
+    source: "no validated distribution yet, so Tier B is off (RULES R-6.4)"
+  include_overtime:
+    value: true
+    status: CONFIRMED
+    source: "the platform settles with overtime (Eric 2026-10-21)"
+  margin_definition:
+    value: home_minus_away_final_incl_ot
+    status: RULE
+    source: "RULES R-7.1"
+  bucket_width:
+    value: 0.5
+    status: RULE
+    source: "RULES R-7.4"
+  exclude:
+    value: ["2019-20 bubble games (2020-07-30 onward)", "2020-21 season"]
+    status: RULE
+    source: "brief 1.4; RULES R-7.3"
+  train_seasons:
+    value: null
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "fixed when the dataset is chosen (Phase 2), before any fitting"
+  holdout_seasons:
+    value: null
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "the most recent complete seasons in the dataset"
+  smoothing_bandwidth:
+    value: null
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "chosen by cross-validation on the training seasons"
+  selected_method:
+    value: null
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "empirical vs discretized normal, by holdout log loss (Phase 3)"
+  bug_bands:
+    value: {margin_sigma: [10, 15], total_sigma: [15, 23]}
+    status: UNVALIDATED
+    source: "brief 1.4, marked unverified there"
+    rationale: "bug detection only; never an input"
+
+model:
+  status:
+    value: "OFF"
+    status: RULE
+    source: "not built yet (Phase 2)"
+  model_veto_pts:
+    value: {spread: 3.0, total: 6.0}
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "placeholder that can only block; Phase 3 sets it to the 80th percentile of |model - closing line| on holdout"
+  model_downgrade_pts:
+    value: {spread: 1.5, total: 3.0}
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "half the veto distance; affects confidence only"
+  prior_shrinkage_k_games:
+    value: null
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "chosen by backtest (Phase 3)"
+  injury_impact_metric:
+    value: none
+    status: RULE
+    source: "no free metric with a documented licence yet; injury adjustment off (RULES R-8.2)"
+
+injuries:
+  source:
+    value: official_nba_injury_report
+    status: RULE
+    source: "brief 1.6"
+  key_player_min_minutes:
+    value: 28
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "roughly a starter's minutes; a proxy only because no licensed impact metric exists; can only block"
+  key_player_window_games:
+    value: 10
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "the current role, not the season average"
+  blocking_statuses:
+    value: [Questionable, Doubtful]
+    status: RULE
+    source: "brief 1.6"
+
+scenario:
+  altitude_teams:
+    value: [DEN, UTA]
+    status: RULE
+    source: "brief 1.7"
+  early_season_games:
+    value: 15
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "flag only; below this, ratings are mostly prior"
+  post_deadline_window_days:
+    value: 14
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "flag only; two weeks for a new rotation to settle"
+  late_season_games_remaining:
+    value: 20
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "flag only; the stretch where lottery position drives motivation"
+  material_flags:
+    value: [B2B, 3IN4, ALTITUDE, NEUTRAL_SITE, CUP_GROUP, POST_DEADLINE_ROSTER, LATE_SEASON_LOTTERY]
+    status: RULE
+    source: "RULES R-10.2"
+
+bias:
+  bias_min_n:
+    value: 200
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "floor against small-sample artifacts (lesson 2); significance comes from the CI; about 2-3 weeks of daily screenshots"
+  bias_min_days:
+    value: 20
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "observations within a day are correlated, and the bootstrap resamples days"
+  bootstrap:
+    value: {unit: slate_date, resamples: 2000, ci: 0.95}
+    status: RULE
+    source: "RULES R-11.3"
+  persistence:
+    value: {window_obs: 10, min_abs_mean_pts: 1.0, ci: 0.90}
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "report-only tracker; these values only decide what gets listed"
+
+clv:
+  pause_min_n:
+    value: 30
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "few qualifying bets are expected; a false pause costs a diagnosis, a missed pause costs money"
+  pause_ci:
+    value: 0.95
+    status: RULE
+    source: "RULES R-14.7"
+  review_weekday:
+    value: Monday
+    status: RULE
+    source: "RULES R-14.6 (Taipei)"
+
+confidence:
+  sigma_ev_medium:
+    value: 0.02
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "label only"
+  sigma_ev_low:
+    value: 0.03
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "label only"
+  material_flags_low:
+    value: 3
+    status: UNVALIDATED
+    source: "Claude 2026-10-21"
+    rationale: "label only"
+
+report:
+  language:
+    value: zh-Hant
+    status: RULE
+    source: "brief"
+  display_tz:
+    value: Asia/Taipei
+    status: RULE
+    source: "brief"
+  max_bet_columns:
+    value: 7
+    status: RULE
+    source: "brief 1.13"
+
+season:
+  regular_season:
+    value: [2026-10-20, 2027-04-11]
+    status: FACT
+    source: "RULES Appendix A (Fox Sports)"
+  cup_group_play_dates:
+    value: [2026-10-30, 2026-11-06, 2026-11-13, 2026-11-20, 2026-11-24, 2026-11-25, 2026-11-27]
+    status: FACT
+    source: "RULES Appendix A (Fox News, NBA.com)"
+  cup_quarterfinals:
+    value: [2026-12-04, 2026-12-05]
+    status: FACT
+    source: "RULES Appendix A (Fox News)"
+  cup_semifinals:
+    value: [2026-12-08, 2026-12-09]
+    status: FACT
+    source: "RULES Appendix A (Fox News); 12-08 and/or 12-09"
+  cup_final:
+    value: {date: 2026-12-11, venue: "Hinkle Fieldhouse, Indianapolis", neutral_site: true}
+    status: FACT
+    source: "RULES Appendix A (Fox News, Eurohoops)"
+  trade_deadline:
+    value: "2027-02-11T15:00:00-05:00"
+    status: FACT
+    source: "RULES Appendix A (Hoops Rumors via Yardbarker)"
+  lottery_regime:
+    value: "3-2-1: 16-team lottery from the 2027 draft"
+    status: FACT
+    source: "RULES Appendix A (AP via WTOP, theScore)"
+  us_dst:
+    value: {ends: 2026-11-01, resumes: 2027-03-14}
+    status: FACT
+    source: "tzdata via zoneinfo, computed 2026-10-21"
