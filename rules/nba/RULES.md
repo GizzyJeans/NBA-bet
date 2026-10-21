@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.2.0 · 2026-10-21 · Phase 1 draft, awaiting Eric's approval**
+**Version 0.3.0 · 2026-10-21 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -108,16 +108,16 @@ Prohibited in v1:
   *Why, in Taipei time from 2026-11-01 (US standard time):* referee assignments are posted around 22:00 the evening before; game-day reports arrive 00:00–05:00 (Eastern teams first, Pacific teams last); evening tips are 08:00–11:30. Subtract one hour before 11-01 and from 03-14. For tips at 5 p.m. local or earlier, game-day reports come 8–10 a.m. local, which is 21:00–23:00 Taipei the evening before for Eastern teams.
 
 - **R-4.6** Every report states, at report time, the age of the US snapshot, the platform snapshot, and the injury report.
-- **R-4.7** Data access. Code makes live requests only through one HTTP helper, and only when a run passes an explicit live flag; tests never touch the network. The helper waits at least `cfg:data_access.min_interval_s` between requests to the same host, sends `cfg:data_access.user_agent`, and stores every raw response with its URL, retrieval time, and SHA-256 so each number can be traced and re-run offline. Each source's terms are checked before first use (Appendix B). *Why:* this is the role the brief gave `pilot.py`, which does not exist; a repository URL identifies the client without publishing a personal email.
+- **R-4.7** Data access. Code makes live requests only through one HTTP helper, and only when a run passes an explicit live flag; tests never touch the network. The helper waits at least `cfg:data_access.min_interval_s` between requests to the same host, sends `cfg:data_access.user_agent`, and stores every raw response with its URL, retrieval time, and SHA-256 so each number can be traced and re-run offline. Each source's terms are checked before first use (Appendix B). Raw Odds API responses stay on the machine that fetched them (`data/raw/`, git-ignored): The Odds API's terms forbid redistributing its data as dumps and this repository is public, so the ledger keeps each snapshot's SHA-256, retrieval time and redacted URL instead. *Why:* this is the role the brief gave `pilot.py`, which does not exist; a repository URL identifies the client without publishing a personal email.
 
 ## 5. Step ①: Anchor
 
 - **R-5.1** Conversions between HK, Malay, decimal, and American odds are exact and round-trip tested. Malay is supported for completeness; the platform uses HK.
 - **R-5.2** De-vig methods: multiplicative, power, and Shin. Shin is the textbook version: solve for z > 0 such that the probabilities sum to 1, with no z = 0 shortcut. The MLB `devig_shin` is not reused: it always returns the multiplicative result (documented in `MLB/docs/gate_2b.md`; at −400/+320 it gives 77.06% where Shin gives 78.10%). Additive is computed for diagnostics only. `cfg:anchor.devig_methods`
-- **R-5.3** Gating and Kelly use, for each leg, the lowest probability across `cfg:anchor.devig_methods` (precedent: MLB gate 2B requires the edge under every method). Reports show the `cfg:anchor.devig_display_method` value and the method spread. Every output records the methods used. `cfg:anchor.devig_gate_mode`
+- **R-5.3** Gating and Kelly use the worst case across `cfg:anchor.devig_methods`: the method that gives the ticket its lowest EV, which for a one-leg ticket is the method with the lowest probability (precedent: MLB gate 2B requires the edge under every method). Reports show the `cfg:anchor.devig_display_method` value and the method spread. Every output records the methods used. `cfg:anchor.devig_gate_mode`
 - **R-5.4** US consensus, per game, market, and line: de-vig each book that quotes both sides, then take the median across books (`cfg:anchor.consensus_statistic`, MLB `market.summarise_line`). No sharp-book weights (`cfg:anchor.sharp_weighting`): weights would be unvalidated inputs able to create bets; revisit only with Phase 3 calibration evidence. Fewer than `cfg:anchor.consensus_min_books` books → `NB-DATA`.
 - **R-5.5** Spreads are keyed to the home team (MLB `line_key`): home −5.5 / away +5.5 is one market, home +5.5 / away −5.5 is another. The reference line `L_ref` is the line most books quote. A book at another line `L_b` with `|L_b − L_ref| ≤ cfg:anchor.consensus_translate_max_gap` is converted to `L_ref` through §7 before the median; books farther away are dropped. While `cfg:distribution.status` ≠ `VALIDATED`, only books at `L_ref` count.
-- **R-5.6** The fair line is where a leg's win and loss probabilities are equal under the consensus distribution (§7 anchored at `L_ref`). It is used for sanity (R-6.6), bias (§11), and display, never to create a bet.
+- **R-5.6** The fair line is where a leg's win and loss probabilities are equal under the consensus distribution (§7 anchored at `L_ref`). It is used for sanity (R-6.6), bias (§11), and display, never to create a bet. While `cfg:distribution.status` ≠ `VALIDATED` the fair line is approximated by `L_ref` itself and logged as `fair_source = l_ref`; the approximation can only block (sanity) or label (R-12.6).
 - **R-5.7** Moneyline vs. spread: the moneyline consensus implies a fair margin through §7. If it differs from the spread's fair line by more than `cfg:anchor.ml_spread_max_gap_pts` → `NB-DATA` for that game's 讓分 and 獨贏 (a data flag, never an edge). Likewise, a Tier A line whose own consensus differs from the §7 distribution by more than `cfg:anchor.consensus_consistency_max_pp` → `NB-DATA`. While §7 is unavailable, both checks are logged as `CHECK_SKIPPED`.
 - **R-5.8** Odds API budget: no pull when the month's remaining credits (read from the response headers) would drop below `cfg:us_odds.min_remaining_reserve`, or when the day already has `cfg:us_odds.max_calls_per_day` pulls. Regions `cfg:anchor.regions`, markets `cfg:anchor.markets`, sport `cfg:anchor.sport_key`. A refused pull → `NB-DATA`.
 
@@ -151,7 +151,7 @@ Prohibited in v1:
 
 ## 9. Injuries and news
 
-- **R-9.1** Source of truth: the official NBA injury report (`cfg:injuries.source`), parsed into a per-player status timeline (report time, status, reason).
+- **R-9.1** Source of truth: the official NBA injury report (`cfg:injuries.source`), parsed into a per-player status timeline (report time, status, reason). Until the report can be fetched and its PDF layout has been tested on a real copy, it enters as a JSON transcription of the official report (format in README), with the report time as its provenance.
 - **R-9.2** At analysis time the newest stored injury report must be at most `cfg:snapshots.injury_report_max_age_min` old; otherwise `NB-STALE`. If the report cannot be fetched → `NB-STATUS`: missing data is not "no injuries".
 - **R-9.3** A key player averaged at least `cfg:injuries.key_player_min_minutes` minutes over his last `cfg:injuries.key_player_window_games` games played. *Why minutes:* no licensed impact metric exists yet, and this proxy can only block.
 - **R-9.4** A key player listed in `cfg:injuries.blocking_statuses` → `NB-STATUS` for that game, unless both EV ≥ 0 under the adverse resolution and EV ≥ `cfg:gates.min_ev` in expectation can be computed. That needs a validated impact metric, which v1 does not have, so in v1 it always blocks.
@@ -166,11 +166,11 @@ Every flag starts with evidence status `UNTESTED`. Flags never change EV or stak
 | `B2B` | team played on the previous US date | — |
 | `3IN4` | team's third game in four US dates | — |
 | `REST_DIFF` | rest-day difference of 2 or more | — |
-| `TRAVEL_TZ` | 2 or more time zones crossed since the team's previous game (distance is logged, not thresholded) | — |
+| `TRAVEL_TZ` | 2 or more time zones crossed since the team's previous game (distance is not logged until a sourced arena table exists) | — |
 | `ALTITUDE` | game in Denver or Salt Lake City | `cfg:scenario.altitude_teams` |
 | `NEUTRAL_SITE` | NBA Cup final at Hinkle Fieldhouse, Indianapolis (the Pacers' home city) | `cfg:season.cup_final` |
-| `CUP_GROUP` | NBA Cup group-play game. Point differential, with overtime excluded, is a tiebreaker, so late-game margins carry incentives | `cfg:season.cup_group_play_dates` |
-| `CUP_KNOCKOUT` | quarterfinal or semifinal (home sites) | `cfg:season.cup_quarterfinals`, `cfg:season.cup_semifinals` |
+| `CUP_GROUP` | NBA Cup group-play game, set from the date (every game on a group-play Cup Night has been a Cup game in past editions; assumed for 2026). Point differential, with overtime excluded, is a tiebreaker, so late-game margins carry incentives | `cfg:season.cup_group_play_dates` |
+| `CUP_KNOCKOUT` | quarterfinal or semifinal (home sites), set only from an explicit knockout list, because teams outside the knockouts play their two extra games around the same dates | `cfg:season.cup_quarterfinals`, `cfg:season.cup_semifinals` |
 | `EARLY_SEASON` | either team has played fewer than `early_season_games` games | `cfg:scenario.early_season_games` |
 | `POST_DEADLINE_ROSTER` | a team traded away or acquired a rotation player within `post_deadline_window_days` | `cfg:scenario.post_deadline_window_days`, `cfg:season.trade_deadline` |
 | `LATE_SEASON_LOTTERY` | one of a team's last `late_season_games_remaining` games while it sits in the 16-team lottery range | `cfg:scenario.late_season_games_remaining`, `cfg:season.lottery_regime` |
@@ -286,7 +286,7 @@ Confidence is informational; it never changes a stake.
 ## 16. Report (繁體中文, mobile-first)
 
 - **R-16.1** Language `cfg:report.language`; times in `cfg:report.display_tz`. The header states the mode, the times of the US snapshot, the platform screenshot, and the injury report (R-4.6), the bankroll, and today's exposure against the daily cap. In `shadow` mode the header says 影子 and every stake is a shadow stake.
-- **R-16.2** The bets table has exactly these `cfg:report.max_bet_columns` columns: 比賽 | 選項 | 平台盤/賠率 | 公平機率 | EV(±) | 注額 | 信心. Under it, one line per bet: tier, edge label (R-12.6), scenario flags, and the worst acceptable platform line, i.e. the worst line at which every gate still passes.
+- **R-16.2** The bets table has exactly these `cfg:report.max_bet_columns` columns: 比賽 | 選項 | 平台盤/賠率 | 公平機率 | EV(±) | 注額 | 信心. Under it, one line per bet: tier, edge label (R-12.6), scenario flags, and the worst acceptable platform line, i.e. the worst line at which G8 and G9 still pass. Lines are searched in tail steps of 5 (0.025 points), 獨贏 prices in steps of 0.01, and the search stops where the ticket can no longer be priced.
 - **R-16.3** The no-bet table has the columns 比賽 | 市場 | 代碼 | 說明, one row per evaluated market. The ledger keeps both sides (R-14.1).
 - **R-16.4** The report ends with what would change each recommendation (「若 X 確定缺陣 → 取消」 style) and a transcription check listing every platform line as it was read.
 
@@ -303,7 +303,7 @@ Template, filled with the §18 example:
 |---|---|---|---|---|---|---|
 | A@H 08:30 | H 讓 4.5 | 4.5 / 0.95 | 55.6% | +8.4% (±1.0) | 1,000 | 中 |
 
-- A@H：Tier B（美盤 −5.5 換算 1 分）｜LAG：06:45 官方傷病報告 A 隊 X 改列缺陣｜情境：無｜最差可接受：讓 5平
+- A@H：Tier B（美盤 −5.5 換算 1 分）｜LAG：06:45 官方傷病報告 A 隊 X 改列缺陣｜情境：無｜最差可接受：讓 5-30
 
 ## 不下注
 | 比賽 | 市場 | 代碼 | 說明 |
@@ -381,8 +381,9 @@ Glossary: handicap 讓分 · total 大小分 · moneyline 獨贏 · no-vig proba
 
 **Step 7: worst acceptable line.**
 - At 讓 `5平`: win if H wins by 6+ (0.5217), push at exactly 5 (0.0340), lose otherwise (0.4443). EV = 0.5217 × 0.95 − 0.4443 = +5.14%; p_eff = 0.5217 / 0.966 = 0.5401, divergence 4.01 pp; EV − σ_EV ≈ 5.14% − 0.98% = 4.16%. All gates pass.
-- At 讓 `5.5`: EV = 0.5217 × 1.95 − 1 = +1.74% < 4% → `NB-EV`.
-- The report therefore says 「最差可接受：讓 5平」.
+- Tail lines between 5 and 5.5 cost XX% of the stake when H wins by exactly 5. At 讓 `5-30`: EV = 0.5217 × 0.95 − 0.034 × 0.30 − 0.4443 = +4.11%; p_eff = 0.5217 / (0.5217 + 0.4443 + 0.0102) = 0.5344, divergence 3.44 pp; EV − σ_EV ≈ 3.1%. All gates pass.
+- At 讓 `5-35`: EV = +3.94% < 4% → `NB-EV`. At 讓 `5.5`: EV = 0.5217 × 1.95 − 1 = +1.74%.
+- The report therefore says 「最差可接受：讓 5-30」. (Version 0.1.0 said 讓 5平, which was right only while tail lines were unconfirmed; ERRATA E-003.)
 
 ## Appendix A. Season facts
 
@@ -410,7 +411,8 @@ This cloud environment's network policy allows only `api.the-odds-api.com` among
 
 | Need | Source | Access here | Terms / notes | Use |
 |---|---|---|---|---|
-| Live US odds | The Odds API v4, `basketball_nba` | reachable; `ODDS_API_KEY` present | Free tier is described by third parties as 500 credits a month, costing markets × regions per pull; historical pulls cost ten times as much and may need a paid plan. Check the official docs before Phase 2 | primary (R-5.8) |
+| Live US odds | The Odds API v4, `basketball_nba` | reachable; `ODDS_API_KEY` present | Free tier is described by third parties as 500 credits a month, costing markets × regions per pull; historical pulls cost ten times as much and may need a paid plan. Its terms forbid reselling or redistributing the data as dumps (raw snapshots stay out of git, R-4.7). Observed 2026-10-21 14:24 UTC (one pull, 3 credits, 416 left in October): region `us` returned 9 books for that night's 11 games, and the most-quoted line carried 3–9 books, so `consensus_min_books` = 8 is often unmet | primary (R-5.8) |
+| Team names | The Odds API `/participants` | reachable | all 30 names in `teams.py` match (checked 2026-10-21, 1 credit) | mapping |
 | Final scores for settlement | The Odds API `/scores` (last 3 days) | reachable | same | primary |
 | Injury report | official.nba.com, PDFs on ak-static.cms.nba.com | blocked | not yet checked | needed for G7 |
 | Referee assignments | official.nba.com/referee-assignments | blocked | not yet checked | needed for G7 |
@@ -440,19 +442,19 @@ This cloud environment's network policy allows only `api.the-odds-api.com` among
 | MLB gate 2B: edge under every de-vig method, ≥ 8 books, ≥ 75% agreement | R-5.3, `consensus_min_books`, `tier_a_book_agreement_min` |
 | NPB: model–market disagreement was mostly model error (β ≈ 1.26, N = 177, post-hoc) | P1 |
 
-## Appendix D. Code to port in Phase 2
+## Appendix D. Code ported in Phase 2
 
-Ported by copying, fixing, and testing; each module's docstring names the source repository and commit.
+Copied, fixed, and tested; each module's docstring names the source repository and commit.
 
-| What | From |
-|---|---|
-| HK and decimal conversion; generalized Kelly | `cc_npb bethero/ev.py` |
-| American and decimal conversion; multiplicative and power de-vig (Shin rewritten) | `MLB src/mlbline/devig.py` |
-| Odds API client, `Quote`, `line_key`, `eastern_date`, `select_slate` | `MLB src/mlbline/odds.py` |
-| Median consensus and quote staleness | `MLB src/mlbline/market.py` |
-| Model-free ticket pricing from US lines | `MLB src/mlbline/verify.py` |
-| Notation parsing and settlement tests | `Codex-NPB src/codex_npb/model.py`, `tests/test_platform_rules.py`; `cc_npb bethero/lines.py` |
-| Hash-chained ledger | `Codex-NPB src/codex_npb/ledger.py` |
-| Per-game pricing-time check from git commit times | `Codex-NPB src/codex_npb/pipeline_cli.py` |
-| Prospective ledger fields, including closing values | `Codex-MLB work/prospective_validation.py` |
-| CJK display width for tables | `MLB src/mlbline/teams.py` |
+| What | From | Now in |
+|---|---|---|
+| HK and decimal conversion; generalized Kelly | `cc_npb bethero/ev.py` @cfe74e9 | `odds.py` |
+| American and decimal conversion; multiplicative and power de-vig (Shin rewritten) | `MLB src/mlbline/devig.py` @9ca07aa | `odds.py` |
+| Odds API client, `Quote`, `line_key`, `eastern_date`, `pair_sides` | `MLB src/mlbline/odds.py` @9ca07aa | `oddsapi.py` |
+| Median consensus and quote staleness | `MLB src/mlbline/market.py` @9ca07aa | `consensus.py` |
+| Model-free ticket pricing from US lines | `MLB src/mlbline/verify.py` @9ca07aa | `odds.ticket_outcomes`, Tier A in `edge.py` |
+| Notation and settlement rules | `Codex-NPB src/codex_npb/model.py`, `tests/test_platform_rules.py` @d85a216; `cc_npb bethero/lines.py` @cfe74e9 | `platform.py` |
+| Hash-chained ledger | `Codex-NPB src/codex_npb/ledger.py` @d85a216 | `ledger.py` |
+| Polite client (delay, user agent) | `Codex-NPB src/codex_npb/sources/npb_official.py` @d85a216 | `net.py` |
+| Per-game pricing-time check from git commit times | `Codex-NPB src/codex_npb/pipeline_cli.py` @d85a216 | `settle.py` (`prospective` flag) |
+| Closing fields for CLV | `Codex-MLB work/prospective_validation.py` @79c8deb | `settle.py` |

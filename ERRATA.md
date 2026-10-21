@@ -9,6 +9,13 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
 - **Impact:** none on any number, rule, or threshold. Attribution only.
 - **Fix:** RULES R-14.1 and R-14.2 cite the right files.
 
+## E-003 · 2026-10-21 · RULES 0.2.0, §16 template and §18 Step 7
+
+- **Wrong:** the worked example's worst acceptable line was 讓 `5平`. That was correct in 0.1.0, when tail lines were unconfirmed, but 0.2.0 confirmed tail lines and the example was not updated.
+- **Correct:** with tail lines, 讓 `5-30` (effective 5.15) still passes every gate: EV +4.11%, divergence 3.44 pp. 讓 `5-35` gives EV +3.94% and fails. Found by the Phase 2 golden test `tests/test_worked_example.py`.
+- **Impact:** display only, 0.15 points in the reported threshold. No gate, EV, or stake changed.
+- **Fix:** RULES 0.3.0 §16 and §18; the test now pins 讓 5-30.
+
 ## E-002 · 2026-10-21 · Phase 0 reply, "missing" bullet on CLV
 
 - **Wrong:** said Codex-MLB computes CLV only from line or price.

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bethero-nba"
+version = "0.1.0"
+description = "Bethero NBA: Asian-platform lines priced against the US no-vig consensus, with gates, shadow staking and Traditional Chinese reports"
+readme = "README.md"
+requires-python = ">=3.11"
+# tzdata is required on Windows, which ships no IANA time-zone database for zoneinfo.
+dependencies = ["PyYAML>=6.0", "tzdata>=2024.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

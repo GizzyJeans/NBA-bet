@@ -1,0 +1,28 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-10-21",
+  "platform_ts": null,
+  "ts_source": "unknown",
+  "source": "Eric's screenshot sent with his Phase 0 answers on 2026-10-21; no phone clock visible and the receive time was not recorded, so it is a decoder sample only",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-10-22T07:05:00+08:00",
+      "home": "ORL",
+      "away": "ATL",
+      "handicap": {"text": "2.5", "row": "home", "price_home": 0.95, "price_away": 0.95},
+      "total": {"text": "大235平", "price_over": 0.94, "price_under": 0.94},
+      "moneyline": {"price_home": "-", "price_away": "-"},
+      "unresolved": []
+    },
+    {
+      "tip": "2026-10-22T07:05:00+08:00",
+      "home": "WAS",
+      "away": "MIL",
+      "handicap": {"text": "5+50", "row": "home", "price_home": 0.95, "price_away": 0.95},
+      "total": {"text": "大238.5", "price_over": 0.94, "price_under": 0.94},
+      "moneyline": {"price_home": 0.56, "price_away": 1.4},
+      "unresolved": []
+    }
+  ]
+}
