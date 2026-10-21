@@ -2,6 +2,11 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.2.0 · 2026-10-21
+
+- Tail lines `N+XX` and `N-XX` confirmed. Eric corrected his earlier 「沒有部份輸贏」 the same day: 「會有部分輸贏的狀況，規則跟A一樣」, i.e. WAS `5+50` at 0.95 with WAS winning by exactly 5 pays +47.5 per 100 on WAS and −50 per 100 on MIL. `cfg:platform.notation.tail_line` moves from `UNCONFIRMED` to `CONFIRMED`; tail lines are priced as two legs (RULES §3.2) and enter the bias monitor at their effective line.
+- R-12.2 and R-12.5 spell out partial outcomes; the report template's no-bet example now shows a tail line stopped at `NB-TIER-C`.
+
 ## 0.1.0 · 2026-10-21
 
 Initial Phase 1 draft (Claude), awaiting Eric's approval.

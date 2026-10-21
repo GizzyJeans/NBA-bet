@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.1.0
+  version: 0.2.0
   updated: 2026-10-21
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -80,9 +80,12 @@ platform:
       status: CONFIRMED
       source: "same platform; Codex-NPB tests/test_platform_rules.py, confirmed by the platform 2026-08-26"
     tail_line:
-      value: null
-      status: UNCONFIRMED
-      source: "conflict: same-platform NPB rule settles partially at exactly N; Eric 2026-10-21: 沒有部份輸贏"
+      value:
+        plus: "XX% of the stake at N - 0.5, the rest at N"
+        minus: "the rest at N, XX% of the stake at N + 0.5"
+        at_exactly_N: "partial win pays XX% of the payout; partial loss costs XX% of the stake"
+      status: CONFIRMED
+      source: "Eric 2026-10-21 correction: 會有部分輸贏的狀況，規則跟A一樣 (WAS 5+50 at 0.95, WAS by exactly 5: +47.5 on WAS, -50 on MIL per 100); N-XX by the same platform rule (Codex-NPB tests/test_platform_rules.py)"
     bare_integer:
       value: null
       status: UNCONFIRMED

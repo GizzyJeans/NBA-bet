@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.1.0 · 2026-10-21 · Phase 1 draft, awaiting Eric's approval**
+**Version 0.2.0 · 2026-10-21 · Phase 1 draft, awaiting Eric's approval**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -67,6 +67,7 @@ Prohibited in v1:
 | Markets shown | 獨贏 · 讓分 · 大小, plus 「更多玩法」 | `CONFIRMED` · screenshot 2026-10-21 |
 | Observed prices | 讓分 0.95 / 0.95 · 大小 0.94 / 0.94 · 獨贏 0.56 / 1.4 or `-` | screenshot 2026-10-21, N = 2 games; informational only (R-3.6) |
 | Overtime | Counts in every market | `CONFIRMED` · Eric 2026-10-21 (「含延長」) |
+| Tail lines `N±XX` | Partial win or partial loss when the result lands exactly on N (§3.2) | `CONFIRMED` · Eric 2026-10-21, correcting his earlier answer (「會有部分輸贏的狀況，規則跟A一樣」) |
 | Postponement or suspension | Does not occur; no special rules | `CONFIRMED` · Eric 2026-10-21 |
 | Bankroll | 100,000, separate from baseball | `CONFIRMED` · Eric 2026-10-21 |
 | Platform bet limit | None (「無上限」) | `CONFIRMED` · Eric 2026-10-21. Read as the platform's limit, not Bethero's caps (R-12.5) |
@@ -79,15 +80,16 @@ Prohibited in v1:
 |---|---|---|---|
 | `X.5` (`2.5`, `大238.5`) | one leg at X.5 | win or lose; cannot push | `CONFIRMED` |
 | `N平` (`大235平`) | one leg at N | exactly N → push, stake refunded | `CONFIRMED` (same-platform rule: `Codex-NPB tests/test_platform_rules.py`, confirmed by the platform 2026-08-26) |
-| `N+XX`, `N-XX` (`5+50`) | — | — | `UNCONFIRMED` → `NB-SETTLEMENT` |
+| `N+XX` (`5+50`) | XX% of the stake at N − 0.5, the rest at N | exactly N: the giving side (or the over) wins XX% of the payout; the other side loses XX% of the stake | `CONFIRMED` · Eric 2026-10-21 |
+| `N-XX` (`5-30`) | the rest at N, XX% of the stake at N + 0.5 | exactly N: the giving side (or the over) loses XX% of the stake; the other side wins XX% of the payout | `CONFIRMED` · same rule (Eric 2026-10-21; `Codex-NPB tests/test_platform_rules.py`) |
 | bare `N` | — | — | `UNCONFIRMED` → `NB-FORMAT` |
 | `N+X` (one digit), anything else | — | — | unreadable → `NB-FORMAT` |
 | `-` | — | — | `NB-NOT-OFFERED` |
 
-*Why `N±XX` is unconfirmed:* on this platform's NPB board, `N+XX` settles partially when the result lands exactly on N: the side laying N (or the over) wins XX% of the payout and the other side loses XX% of the stake. Under that rule `5+50` equals the standard Asian line 4.75 (half the stake at 4.5, half at 5). Eric's answer of 2026-10-21 says the NBA board has 「沒有部份輸贏」 (no partial win or loss). The two conflict, so `N±XX` stays `UNCONFIRMED` until Eric settles one concrete case; the answer goes into CHANGELOG.
+*Confirming case (Eric, 2026-10-21):* WAS gives `5+50` at 0.95. If WAS wins by exactly 5, 100 on WAS wins 47.5 (100 × 0.95 × 50%) and 100 on MIL loses 50. A partial win pays a share of the payout; a partial loss costs a share of the stake. The two-leg split reproduces this exactly for integer scores. The effective line is N − s/2, with s = +XX/100 for `+` and −XX/100 for `-`: `5+50` is 4.75 (half at 4.5, half at 5) and `5-30` is 5.15.
 
 - **R-3.1** Odds are Hong Kong odds h: decimal = 1 + h. A stake s risks s to win s·h, so amount at risk = stake. `cfg:platform.odds_format`
-- **R-3.2** Each market is decoded with the table above. One leg that is `UNCONFIRMED` or unreadable makes the whole market `NB-FORMAT` or `NB-SETTLEMENT`. `cfg:platform.notation`
+- **R-3.2** Each market is decoded with the table above into legs, and each leg is tiered on its own (§6). One leg that is `UNCONFIRMED` or unreadable makes the whole market `NB-FORMAT` or `NB-SETTLEMENT`. `cfg:platform.notation`
 - **R-3.3** The handicap number is printed in the giving team's row; that team lays the line. The row marked `[主]` is home. Internally every handicap is stored as `home_line` (negative = home gives).
 - **R-3.4** When the board shows a moneyline, its favourite (the lower HK price) must be the giving team. A conflict → `NB-DATA` for that game's 讓分 and 獨贏.
 - **R-3.5** Overtime counts in settlement for every market. `cfg:platform.settles_overtime`
@@ -185,7 +187,7 @@ Every flag starts with evidence status `UNTESTED`. Flags never change EV or stak
   - `bias_total_pts` = fair total − platform total (positive: favourable to over backers);
   - P-space bias = P_US(cover at the platform line) − 0.5, per side.
 
-  `N±XX` observations are stored raw and excluded until their semantics are confirmed.
+  Tail lines enter at their effective line N − s/2 (§3.2).
 - **R-11.2** Splits: market; favourite / underdog; home / away; line-size bucket; time-to-tip bucket.
 - **R-11.3** Inference: block bootstrap by slate date (`cfg:bias.bootstrap`). A bias is USABLE only when n ≥ `cfg:bias.bias_min_n`, distinct dates ≥ `cfg:bias.bias_min_days`, and the 95% CI excludes 0. Otherwise it is TENTATIVE.
 - **R-11.4** A usable bias never changes EV. It labels an edge `BIAS` (R-12.6) and is reported weekly.
@@ -195,7 +197,7 @@ Every flag starts with evidence status `UNTESTED`. Flags never change EV or stak
 ## 12. Steps ③–④: EV, gates, sizing
 
 - **R-12.1** EV per unit stake at the platform price h: EV = Σ over legs of weight × [P(win)·h − P(lose)]; a push contributes 0. Probabilities follow R-5.3.
-- **R-12.2** Effective win probability p_eff = W / (W + L), where W and L are the win and loss masses (pushes excluded). The platform no-vig probability is the de-vig of the platform's own two prices (0.5 when they are equal). Divergence = p_eff − platform no-vig.
+- **R-12.2** Effective win probability p_eff = W / (W + L), where W and L are the stake-weighted win and loss masses summed over legs (pushes excluded). The platform no-vig probability is the de-vig of the platform's own two prices (0.5 when they are equal). Divergence = p_eff − platform no-vig.
 - **R-12.3** Noise:
   - σ_method = half the range of the leg probability across de-vig methods;
   - σ_books = 1.2533 × (IQR / 1.349) / √n, the standard error of the median across n books;
@@ -225,7 +227,7 @@ Every flag starts with evidence status `UNTESTED`. Flags never change EV or stak
   *Why this order:* data completeness is checked before the edge, so a missing input cannot become a small edge (MLB `policy.py`). With equal 0.95 prices, G9 is implied by G8, because EV ≥ 4% already needs p_eff ≥ 53.33%; G9 is kept for unequal prices and moneylines.
 
 - **R-12.5** Stake:
-  1. f\* = argmax over f of Σᵢ pᵢ · log(1 + f · rᵢ) over the win / push / loss outcomes, using R-5.3 probabilities (generalized Kelly, as in `cc_npb bethero/ev.py`).
+  1. f\* = argmax over f of Σᵢ pᵢ · log(1 + f · rᵢ) over every settlement outcome (full win, partial win, push, partial loss, full loss), using R-5.3 probabilities (generalized Kelly, as in `cc_npb bethero/ev.py`).
   2. stake = min(`cfg:risk.kelly_fraction` × f\* × bankroll, `cfg:risk.max_bet_pct` × bankroll, remaining daily cap, remaining per-game cap), rounded down to `cfg:platform.stake_increment`. Bankroll = `cfg:risk.bankroll`.
   3. Below `cfg:platform.min_stake` → `NB-MIN-STAKE`; a cap already exhausted → `NB-CAP`.
   4. Caps count amount at risk; with HK odds, risk = stake.
@@ -268,7 +270,7 @@ Confidence is informational; it never changes a stake.
 | `NB-NOT-OFFERED` | G0 | 平台沒開這個盤（顯示「-」） |
 | `NB-PAUSED` | G0 | 暫停規則啟動中，等待診斷 |
 | `NB-FORMAT` | G1 | 盤口寫法或賠率格式讀不出來或未確認 |
-| `NB-SETTLEMENT` | G1 | 這種寫法的結算規則未確認（目前：所有 N±XX 尾盤） |
+| `NB-SETTLEMENT` | G1 | 這種寫法的結算規則未確認（目前沒有） |
 | `NB-STALE` | G3 | 平台與美盤快照不同步，報價或傷病報告過舊，或已開賽 |
 | `NB-DATA` | G4 | 資料不足或互相矛盾（書商太少、隊名對不上、獨贏與讓分矛盾、API 額度不足） |
 | `NB-SANITY` | G5 | 與美盤公平線差太多或方向相反，推定是舊盤、抄錯或未反映的消息 |
@@ -307,7 +309,7 @@ Template, filled with the §18 example:
 | 比賽 | 市場 | 代碼 | 說明 |
 |---|---|---|---|
 | A@H | 大小 | NB-EV | 平台 228.5 與美盤相同，EV −3.0% |
-| C@D | 讓分 | NB-SETTLEMENT | 5+50 尾盤結算規則待確認 |
+| C@D | 讓分 | NB-TIER-C | 5+50 的 4.5 與 5 兩腳都要換算，分布尚未驗證 |
 | C@D | 獨贏 | NB-NOT-OFFERED | 平台沒開 |
 
 ## 什麼會改變建議
@@ -449,7 +451,7 @@ Ported by copying, fixing, and testing; each module's docstring names the source
 | Odds API client, `Quote`, `line_key`, `eastern_date`, `select_slate` | `MLB src/mlbline/odds.py` |
 | Median consensus and quote staleness | `MLB src/mlbline/market.py` |
 | Model-free ticket pricing from US lines | `MLB src/mlbline/verify.py` |
-| Notation parsing and settlement tests (tail lines pending) | `Codex-NPB src/codex_npb/model.py`, `tests/test_platform_rules.py`; `cc_npb bethero/lines.py` |
+| Notation parsing and settlement tests | `Codex-NPB src/codex_npb/model.py`, `tests/test_platform_rules.py`; `cc_npb bethero/lines.py` |
 | Hash-chained ledger | `Codex-NPB src/codex_npb/ledger.py` |
 | Per-game pricing-time check from git commit times | `Codex-NPB src/codex_npb/pipeline_cli.py` |
 | Prospective ledger fields, including closing values | `Codex-MLB work/prospective_validation.py` |
