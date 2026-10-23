@@ -21,7 +21,11 @@ $env:ODDS_API_KEY = "<your key>"      # never committed, never printed
 ## Daily flow
 
 1. **Board.** Eric sends a screenshot (keep the phone's clock visible). Claude transcribes it to `data/boards/<US slate date>/<platform time>.json` and commits it before the first tip; the commit time is the evidence of pricing time.
-2. **Injuries.** Until the official report can be fetched (official.nba.com is blocked from the cloud environment), Claude transcribes it to JSON (format below). Without it every game stops at `NB-STATUS`.
+2. **Injuries.** official.nba.com blocks the cloud environment (Akamai 403), and nothing fetches from NBA hosts automatically. Eric sends two things, saved in his browser:
+   - the newest official injury report PDF. It is linked from official.nba.com's "NBA Injury Report" page; last season the page was `/nba-injury-report-2025-26/`. The files are named `https://ak-static.cms.nba.com/referee/injury/Injury-Report_YYYY-MM-DD_hh_mmAM.pdf` (or `PM`), in US Eastern time. In 2025-26 the file names ran in 15-minute steps.
+   - a screenshot of official.nba.com/referee-assignments/ showing the day's referees, which are posted about 9 a.m. ET.
+
+   Claude transcribes both to `data/injuries/<slate>.json` (format below) and commits it with the board. The report may be at most `snapshots.injury_report_max_age_min` (30) minutes old at analysis time. Without it every game stops at `NB-STATUS`. The PDFs stay out of git: they are the NBA's documents and the repository is public.
 3. **Analyze.**
    ```powershell
    py -m bethero_nba.analyze --board data\boards\2026-11-02\20261103T071000+0800.json --live --injuries data\injuries\2026-11-02.json
@@ -93,7 +97,8 @@ py -m bethero_nba.validate --history data\history\games.csv --out rules\nba\VALI
 }
 ```
 
-`submissions` is when each team's game-day status first appeared; `minutes` holds recent minutes per player and decides who is a key player (RULES R-9.3). Leave `minutes` out and the status gate cannot pass.
+- `submissions`: when each team's game-day status first appeared. From a single PDF, this is that report's time for every team it shows as submitted.
+- `minutes` is optional (RULES R-9.3). A player listed Questionable or Doubtful blocks his game unless his recent minutes are given and show he is not a key player.
 
 ## Current limits
 

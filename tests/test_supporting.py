@@ -39,14 +39,19 @@ def test_parse_rows_refuses_unexpected_shapes(rows):
         injuries.parse_rows(rows, datetime(2026, 11, 2, 13, tzinfo=ET))
 
 
-def test_blocking_players_needs_minutes(cfg):
+def test_blocking_players_treat_unknown_minutes_as_key(cfg):
     t = datetime(2026, 11, 2, 13, 0, tzinfo=ET)
     tl = injuries.Timeline(injuries.parse_rows(ROWS, t))
-    assert injuries.blocking_players(tl, ("NYK", "BOS"), None, cfg, t) is None
+    # Brunson is Questionable; Hart (Out) and Tatum (Probable) never block
+    assert injuries.blocking_players(tl, ("NYK", "BOS"), None, cfg, t) == ["Brunson, Jalen（Questionable）"]
     minutes = {"NYK": {"Brunson, Jalen": [35] * 10, "Hart, Josh": [36] * 10}, "BOS": {"Tatum, Jayson": [37] * 10}}
     assert injuries.blocking_players(tl, ("NYK", "BOS"), minutes, cfg, t) == ["Brunson, Jalen（Questionable）"]
     bench = {"NYK": {"Brunson, Jalen": [12] * 10}}
     assert injuries.blocking_players(tl, ("NYK", "BOS"), bench, cfg, t) == []
+    quiet_rows = [ROWS[0], ["11/02/2026", "07:30 (ET)", "NYK@BOS", "New York Knicks", "Hart, Josh", "Out", "Knee"],
+                  ROWS[3]]
+    quiet = injuries.Timeline(injuries.parse_rows(quiet_rows, t))                # nobody Questionable or Doubtful
+    assert injuries.blocking_players(quiet, ("NYK", "BOS"), None, cfg, t) == []
 
 
 def test_final_eligible_windows():
@@ -155,6 +160,18 @@ def test_clv_line_and_us():
     assert clv.clv_line((Leg(4.5, 1.0),), None, 0.95, True, cover) is None
     ev_close, change = clv.clv_us((Leg(4.5, 1.0),), 0.95, True, cover, ev_at_bet=0.08)
     assert ev_close == pytest.approx(0.56 * 1.95 - 1) and change == pytest.approx(ev_close - 0.08)
+
+
+def test_golive_readiness_is_strict(cfg):
+    start = date(2026, 11, 1)
+    good = [(start + timedelta(days=i), 0.03 + 0.002 * (i % 3)) for i in range(30)]
+    assert clv.golive_check(good, cfg).ready
+    assert not clv.golive_check(good[:29], cfg).ready                         # under golive.min_bets
+    one_day = [(start, 0.03)] * 40
+    assert not clv.golive_check(one_day, cfg).ready                           # under golive.min_slate_days
+    unclear = [(start + timedelta(days=i), (-1) ** i * 0.03 + 0.002) for i in range(40)]
+    check = clv.golive_check(unclear, cfg)
+    assert check.mean > 0 and check.low < 0 and not check.ready              # CI crosses 0: keep shadow
 
 
 def test_pause_rule(cfg):

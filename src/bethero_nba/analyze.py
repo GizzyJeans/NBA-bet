@@ -47,10 +47,7 @@ def load_injuries(path: Path, board, cfg, at: datetime) -> tuple[dict, dict, dat
     for game in board.games:
         teams = (game.home.tricode, game.away.tricode)
         eligible[game.label] = injuries.final_eligible(game.tip, teams, submissions, refs, at, b2b)
-        found = injuries.blocking_players(timeline, teams, minutes, cfg, at)
-        if found is None:
-            return eligible, None, report_time
-        blocking[game.label] = found
+        blocking[game.label] = injuries.blocking_players(timeline, teams, minutes, cfg, at)
     return eligible, blocking, report_time
 
 

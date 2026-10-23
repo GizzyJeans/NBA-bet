@@ -11,9 +11,9 @@ game and a team only on their first row, so blank leading cells carry the
 value from the row above. Fetching and PDF text extraction are not
 implemented: official.nba.com is blocked from the cloud environment and no real
 report has been seen yet, so the first real report becomes the parser's test
-fixture before the gate relies on it. Until then `blocking` is None in every
-pass and every game ends at NB-STATUS (RULES R-9.2), which is the intended
-fail-safe.
+fixture before the gate relies on it. Until then the report enters as Eric's
+transcription (README); without one, `blocking` is None in the pass and every
+game ends at NB-STATUS (RULES R-9.2), which is the intended fail-safe.
 """
 
 from __future__ import annotations
@@ -99,17 +99,21 @@ def key_players(minutes: dict[str, list[float]], cfg) -> set[str]:
 
 
 def blocking_players(timeline: Timeline, tricodes: tuple[str, str],
-                     minutes: dict[str, dict[str, list[float]]] | None, cfg, at: datetime) -> list[str] | None:
-    """Key players currently listed with a blocking status, or None when the
-    minutes needed to know who is key are missing (then the gate cannot pass)."""
-    if minutes is None:
-        return None
+                     minutes: dict[str, dict[str, list[float]]] | None, cfg, at: datetime) -> list[str]:
+    """Players currently listed with a blocking status who are key (RULES R-9.3).
+
+    A listed player whose recent minutes are not supplied counts as key: missing
+    data can only block. So minutes are needed only to clear a bench player."""
     blocking = set(cfg.get("injuries.blocking_statuses"))
     found = []
     for tricode in tricodes:
-        for player in sorted(key_players(minutes.get(tricode, {}), cfg)):
+        known = (minutes or {}).get(tricode, {})
+        keys = key_players(known, cfg)
+        for player in sorted(timeline.players(tricode)):
             record = timeline.status_at(tricode, player, at)
-            if record is not None and record.status in blocking:
+            if record is None or record.status not in blocking:
+                continue
+            if player not in known or player in keys:
                 found.append(f"{player}（{record.status}）")
     return found
 

@@ -9,3 +9,4 @@ venv/
 /dist/
 data/raw/
 data/history/
+data/**/*.pdf

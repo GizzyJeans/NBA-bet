@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.5.1 · 2026-10-23 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
+**Version 0.5.2 · 2026-10-23 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -153,7 +153,7 @@ Prohibited in v1:
 
 - **R-9.1** Source of truth: the official NBA injury report (`cfg:injuries.source`), parsed into a per-player status timeline (report time, status, reason). Until the report can be fetched and its PDF layout has been tested on a real copy, it enters as a JSON transcription of the official report (format in README), with the report time as its provenance.
 - **R-9.2** At analysis time the newest stored injury report must be at most `cfg:snapshots.injury_report_max_age_min` old; otherwise `NB-STALE`. If the report cannot be fetched → `NB-STATUS`: missing data is not "no injuries".
-- **R-9.3** A key player averaged at least `cfg:injuries.key_player_min_minutes` minutes over his last `cfg:injuries.key_player_window_games` games played. *Why minutes:* no licensed impact metric exists yet, and this proxy can only block.
+- **R-9.3** A key player averaged at least `cfg:injuries.key_player_min_minutes` minutes over his last `cfg:injuries.key_player_window_games` games played. *Why minutes:* no licensed impact metric exists yet, and this proxy can only block. A player listed in a blocking status whose recent minutes are not supplied counts as key: missing data can only block. So minutes are needed only to clear a bench player.
 - **R-9.4** A key player listed in `cfg:injuries.blocking_statuses` → `NB-STATUS` for that game, unless both EV ≥ 0 under the adverse resolution and EV ≥ `cfg:gates.min_ev` in expectation can be computed. That needs a validated impact metric, which v1 does not have, so in v1 it always blocks.
 - **R-9.5** A news-lag edge requires all of: a sourced trigger with timestamp T; the US consensus moved after T; a platform screenshot taken after T that still shows the pre-move line; and synchronized snapshots (R-4.4). It is labelled `LAG`, and Eric weighs account-limitation risk separately.
 
@@ -236,7 +236,7 @@ Every flag starts with evidence status `UNTESTED`. Flags never change EV or stak
 
   *Why the caps stay although the platform has no limit:* the largest EVs come disproportionately from errors (a misread line, a stale screenshot), and quarter Kelly sizes those errors largest. The caps bound that damage. Removing them is Eric's call (`CONFIRM`).
 - **R-12.6** Edge label: `LAG` when R-9.5 holds; `BIAS` when the edge's direction matches a USABLE bias (R-11.3); `ROUNDING` when `|platform line − fair line| ≤ cfg:tiers.rounding_max_pts` and neither applies; otherwise `UNEXPLAINED`.
-- **R-12.7** Mode: when `cfg:mode` = `shadow`, stakes are computed and logged as 影子注額 and are not to be placed. Live requires Eric's explicit go-live message.
+- **R-12.7** Mode: when `cfg:mode` = `shadow`, stakes are computed and logged as 影子注額 and are not to be placed. Live requires Eric's explicit go-live message. The readiness conditions Eric accepted on 2026-10-23 are in `cfg:golive` (VALIDATION.md §3). `settle` reports them on every run, but they never change the mode by themselves.
 - **R-12.8** Few qualifying bets is the expected outcome.
 
 ## 13. Step ⑤: Confidence

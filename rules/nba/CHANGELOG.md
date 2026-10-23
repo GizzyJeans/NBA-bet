@@ -2,6 +2,14 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.5.2 · 2026-10-23
+
+- Eric 2026-10-23: 「1.嚴格版 2.模型先關」.
+  - New section `golive`, all CONFIRMED: `min_bets` 30, `min_slate_days` 20, `ci` 0.95 (mean `CLV_US` > 0 with the CI entirely above 0), `require_prospective` true. These are readiness only; R-12.7 still needs his go-live message. `settle` prints readiness on every run (`clv.golive_check`).
+  - `model.status` `"OFF"`: RULE → CONFIRMED.
+- R-9.3: a player listed Questionable or Doubtful whose recent minutes are not supplied counts as key. Before, a transcription without minutes blocked every game, even games with no such player. Now the official report alone settles games where neither team lists one, and minutes are needed only to clear a bench player. No game that a listed key player blocks can pass.
+- VALIDATION.md §3 records the accepted conditions. README explains where the official report is and what to send.
+
 ## 0.5.1 · 2026-10-23
 
 - `model.status` stays `"OFF"`; its label changes from `CONFIRM` to `RULE`. `CONFIRM` means "the value shown is the stricter default", and OFF is not the stricter value: a model that is on can only block more bets. The source now says that turning it on needs in-season results and a run-time fit in `analyze` first (ERRATA E-006).

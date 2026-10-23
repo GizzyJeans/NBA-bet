@@ -163,6 +163,14 @@ def main(argv: list[str] | None = None) -> int:
                if r.get("record_type") == "settlement" and r.get("clv_us") is not None] + clv_values
     check = clv.pause_check(history, cfg)
     print(f"settled {len(rows)} bet(s); CLV_US sample {check.n}; pause: {'YES' if check.paused else 'no'}")
+    counted = [(date.fromisoformat(r["slate_et"]), r["clv_us"]) for r in records + rows
+               if r.get("record_type") == "settlement" and r.get("clv_us") is not None
+               and r.get("mode") == "shadow" and (r.get("prospective") or not cfg.get("golive.require_prospective"))]
+    ready = clv.golive_check(counted, cfg)
+    interval = (f"mean {ready.mean:+.4f}, CI [{ready.low:+.4f}, {ready.high:+.4f}]" if ready.mean is not None
+                else f"needs {cfg.get('golive.min_bets')} bets over {cfg.get('golive.min_slate_days')} slate days")
+    print(f"go-live readiness (strict): {ready.n} prospective shadow bets over {ready.days} days; {interval}; "
+          f"{'conditions met; going live still needs Eric' if ready.ready else 'not yet'}")
     return 0
 
 

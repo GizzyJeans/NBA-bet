@@ -59,6 +59,31 @@ def pause_check(values: list[tuple[date, float]], cfg) -> PauseCheck:
     return PauseCheck(mean < 0 and hi < 0, len(values), mean, lo, hi)
 
 
+@dataclass(frozen=True)
+class GoLiveCheck:
+    ready: bool
+    n: int
+    days: int
+    mean: float | None
+    low: float | None
+    high: float | None
+
+
+def golive_check(values: list[tuple[date, float]], cfg) -> GoLiveCheck:
+    """Go-live readiness as Eric accepted it (2026-10-23, strict; VALIDATION.md §3):
+    at least `golive.min_bets` prospective shadow bets with CLV_US over at least
+    `golive.min_slate_days` slate dates, and the date-block bootstrap CI of mean CLV_US
+    entirely above 0. Readiness only: the mode changes on Eric's message alone (R-12.7)."""
+    by_day: dict[date, list[float]] = {}
+    for day, v in values:
+        by_day.setdefault(day, []).append(v)
+    if len(values) < cfg.get("golive.min_bets") or len(by_day) < cfg.get("golive.min_slate_days"):
+        return GoLiveCheck(False, len(values), len(by_day), None, None, None)
+    boot = cfg.get("bias.bootstrap")
+    mean, lo, hi = bootstrap(by_day, resamples=boot["resamples"], ci=cfg.get("golive.ci"))
+    return GoLiveCheck(mean > 0 and lo > 0, len(values), len(by_day), mean, lo, hi)
+
+
 def summary(values: list[float]) -> dict[str, float | int | None]:
     if not values:
         return {"n": 0, "mean": None}

@@ -133,18 +133,18 @@ The budget guard allows two odds pulls per UTC day and keeps 50 credits in reser
 - **SM5** The bias monitor (RULES §11) with its unchanged USABLE rule.
 - **SM6** Realised shadow P&L, reported, never deciding (R-14.8).
 
-**Go-live, proposed.** Each condition is Eric's to accept or change.
+**Go-live.** Eric accepted these with the strict variant on 2026-10-23 (「1.嚴格版」); they are in `cfg:golive`, and `settle` reports them on every run.
 
-1. At least `cfg:clv.pause_min_n` (30) shadow bets with `CLV_US`, over at least 20 slate days.
-2. Mean `CLV_US` above 0, with its CI excluding 0. This is the stricter of two candidates; the looser one only asks that the pause rule never fired. Flagged for Eric's choice.
-3. Every one of those bets is `prospective`: the board was committed before tip.
+1. At least 30 shadow bets with `CLV_US` (`cfg:golive.min_bets`), over at least 20 slate days (`cfg:golive.min_slate_days`).
+2. Mean `CLV_US` above 0, with its date-block bootstrap CI (`cfg:golive.ci`, 95%) entirely above 0. The looser candidate, which only asked that the pause rule never fired, was declined.
+3. Every one of those bets is `prospective`: the board was committed before tip (`cfg:golive.require_prospective`).
 4. No open ERRATA item affecting a stake; tests green; every market used is validated.
 5. Eric's explicit go-live message.
 
 **Going live does not change:**
 
 - the pause rule (R-14.7), which still applies;
-- the model, which stays OFF unless Eric turns it on separately;
+- the model, which stays OFF (Eric 2026-10-23: 「2.模型先關」) unless he turns it on separately;
 - the caps of 1% per bet, 5% per day and 1% per game.
 
 **How often a bet will appear is unknown** (§2.1). At the platform's 0.95 price a ticket needs a fair cover probability of 1.04 / 1.95 = 53.3% for EV ≥ 4%. Near the middle of the spread distribution (sigma about 13.5) that takes a platform line roughly one point better than the US fair line. On the 2026-10-21 sample every priced market had negative EV.

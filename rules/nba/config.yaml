@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.5.1
+  version: 0.5.2
   updated: 2026-10-23
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -352,8 +352,8 @@ distribution:
 model:
   status:
     value: "OFF"
-    status: RULE
-    source: "VALIDATION.md M3 and R6: evaluated offline; stays OFF until Eric decides. The engine runs without a model until this season's results are collected and the fit is wired into analyze (RULES R-8.5, ERRATA E-006)"
+    status: CONFIRMED
+    source: "Eric 2026-10-23: 「2.模型先關」, after VALIDATION.md R6. Turning it on later also needs this season's results and a run-time fit in analyze (RULES R-8.5, ERRATA E-006)"
   model_veto_pts:
     value: {spread: 5.4, total: 7.0}
     status: VALIDATED
@@ -451,6 +451,25 @@ clv:
     value: Monday
     status: RULE
     source: "RULES R-14.6 (Taipei)"
+
+golive:
+  # Readiness only: the mode leaves shadow on Eric's explicit message alone (RULES R-12.7).
+  min_bets:
+    value: 30
+    status: CONFIRMED
+    source: "Eric 2026-10-23: 「1.嚴格版」, accepting VALIDATION.md §3: shadow bets with CLV_US available"
+  min_slate_days:
+    value: 20
+    status: CONFIRMED
+    source: "Eric 2026-10-23: 「1.嚴格版」 (VALIDATION.md §3)"
+  ci:
+    value: 0.95
+    status: CONFIRMED
+    source: "Eric 2026-10-23: 「1.嚴格版」: mean CLV_US > 0 with this date-block bootstrap CI entirely above 0 (the pause rule's level)"
+  require_prospective:
+    value: true
+    status: CONFIRMED
+    source: "Eric 2026-10-23: 「1.嚴格版」: only bets whose board was committed before tip count (RULES R-14.2)"
 
 confidence:
   sigma_ev_medium:
