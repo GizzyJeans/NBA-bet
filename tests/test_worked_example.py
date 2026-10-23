@@ -10,7 +10,8 @@ from tests.helpers import (ANALYSIS_TS, HypotheticalTierB, REPORT_TS, US_TS, boa
 
 @pytest.fixture
 def worked(cfg):
-    cfg = with_values(cfg, **{"distribution.status": "VALIDATED"})
+    cfg = with_values(cfg, **{"distribution.status": "VALIDATED",
+                              "distribution.validated_markets": ["spreads", "totals"]})
     b = board()
     gc = game_consensus(us_game(), cfg)
     ctx = context(cfg, b, tier_b=HypotheticalTierB())

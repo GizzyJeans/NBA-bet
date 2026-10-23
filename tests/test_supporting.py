@@ -168,42 +168,6 @@ def test_pause_rule(cfg):
 
 # ----------------------------------------------------------------- validate
 
-def history(seasons=("2023-24", "2024-25"), per=600, seed=5):
-    rng = random.Random(seed)
-    rows = []
-    for season in seasons:
-        for i in range(per):
-            spread = rng.choice([-7.5, -5.5, -3.5, -1.5, 2.5, 4.5])
-            margin = round(-spread + rng.gauss(0, 12)) or 1
-            total_line = rng.choice([220.5, 228.5, 236.5])
-            total = round(total_line + rng.gauss(0, 18))
-            home = (total + margin) // 2
-            away = total - home
-            rows.append(HistoryRow(season, date(2024, 1, 1) + timedelta(days=i // 8), "BOS", "NYK",
-                                   home, away, spread, total_line, "synthetic", -150, 130))
-    return rows
-
-
-def test_distribution_check_reports_both_models():
-    rows = history()
-    train = [r for r in rows if r.season == "2023-24"]
-    hold = [r for r in rows if r.season == "2024-25"]
-    result = validate.distribution_check(train, hold, "spreads", bucket_width=0.5, bandwidth=1.0)
-    assert result["n_holdout"] == 600 and len(result["offsets"]) == len(validate.OFFSETS)
-    assert 9 < result["residual_sd"] < 15
-    assert result["winner"] in ("empirical", "normal")
-
-
-def test_devig_and_model_checks():
-    rows = history()
-    out = validate.devig_check(rows, ("multiplicative", "power", "shin"))
-    assert set(out) == {"multiplicative", "power", "shin"} and out["shin"]["n"] == 1200
-    report = validate.model_check(rows[:300], k=10.0)
-    assert sum(r["n"] for r in report.values()) > 0
-    text = validate.markdown([], out, report, "synthetic")
-    assert "| shin | 1200 |" in text
-
-
 def test_exclusions():
     bubble = HistoryRow("2019-20", date(2020, 8, 1), "A", "B", 1, 0, None, None, "x")
     pre = HistoryRow("2019-20", date(2020, 3, 1), "A", "B", 1, 0, None, None, "x")

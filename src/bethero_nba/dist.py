@@ -17,6 +17,7 @@ engine never calls this module.
 from __future__ import annotations
 
 import csv
+import json
 import math
 from dataclasses import dataclass
 from datetime import date
@@ -24,6 +25,7 @@ from pathlib import Path
 from statistics import NormalDist
 from typing import Iterable
 
+DIST_SCHEMA = "bethero-nba-dist/1"
 HISTORY_COLUMNS = ("season", "date", "home", "away", "home_score", "away_score",
                    "close_spread_home", "close_total", "source")
 OPTIONAL_COLUMNS = ("close_ml_home", "close_ml_away")      # American odds, for the de-vig comparison
@@ -108,6 +110,13 @@ class EmpiricalFamily:
     def fit(cls, rows: Iterable[HistoryRow], market: str, *, bucket_width: float,
             bandwidth: float) -> "EmpiricalFamily":
         return cls(market, _observations(rows, market), bucket_width, bandwidth)
+
+    @classmethod
+    def from_buckets(cls, market: str, buckets: dict[float, dict[int, int]], *, bucket_width: float,
+                     bandwidth: float) -> "EmpiricalFamily":
+        family = cls(market, (), bucket_width, bandwidth)
+        family.buckets = {float(b): {int(x): int(n) for x, n in counts.items()} for b, counts in buckets.items()}
+        return family
 
     def _weights(self, s: float) -> dict[float, float]:
         reach = 4 * self.bandwidth
@@ -227,11 +236,48 @@ def anchor(family, ref_line: float, p_ref: float, *, search: float = 15.0) -> An
     return Anchored(family.pmf(s_star), s_star, eff_n)
 
 
+def save_families(path: Path | str, empirical: EmpiricalFamily, normal: NormalFamily, meta: dict) -> None:
+    """Both families of one market as aggregate counts: per line bucket, how many
+    games ended at each margin (or total). No game rows (VALIDATION.md D5)."""
+    data = {"schema": DIST_SCHEMA, "market": empirical.market, **meta,
+            "empirical": {"bucket_width": empirical.bucket_width, "bandwidth": empirical.bandwidth,
+                          "buckets": {f"{b:g}": {str(x): n for x, n in sorted(counts.items())}
+                                      for b, counts in sorted(empirical.buckets.items())}},
+            "normal": {"sigma": normal.sigma, "offset": normal.offset}}
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8", newline="\n")
+
+
+def load_families(path: Path | str) -> tuple[EmpiricalFamily, NormalFamily, dict]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if data.get("schema") != DIST_SCHEMA:
+        raise ValueError(f"{path}: not a {DIST_SCHEMA} file")
+    e = data["empirical"]
+    empirical = EmpiricalFamily.from_buckets(data["market"], {float(b): c for b, c in e["buckets"].items()},
+                                             bucket_width=e["bucket_width"], bandwidth=e["bandwidth"])
+    normal = NormalFamily(data["market"], data["normal"]["sigma"], data["normal"]["offset"])
+    return empirical, normal, data
+
+
+def load_tier_b(directory: Path | str, markets: Iterable[str], selected: dict[str, str]) -> "TierB | None":
+    """TierB for the validated markets only, from the files `validate --write-dist` wrote.
+    `selected` maps the config scale (spread / total) to the family VALIDATION.md chose."""
+    primary, alternative = {}, {}
+    for market in markets:
+        empirical, normal, _ = load_families(Path(directory) / f"{market}.json")
+        scale = "spread" if market == "spreads" else "total"
+        first, second = (empirical, normal) if selected[scale] == "empirical" else (normal, empirical)
+        primary[market], alternative[market] = first, second
+    return TierB(primary, alternative) if primary else None
+
+
 class TierB:
     """The provider `edge` uses: a primary family and its comparison per market.
 
-    Built only once cfg:distribution.status is VALIDATED; `primary` is the
-    family VALIDATION.md selected (cfg:distribution.selected_method).
+    Built only once cfg:distribution.status is VALIDATED, and only for the
+    markets in cfg:distribution.validated_markets; `primary` is the family
+    VALIDATION.md selected (cfg:distribution.selected_method).
     """
 
     def __init__(self, primary: dict[str, object], alternative: dict[str, object]):

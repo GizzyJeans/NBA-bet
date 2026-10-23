@@ -318,9 +318,10 @@ def _evaluate(game: BoardGame, market: Market, side: str, laying: bool, gc: Game
                 d.fail("NB-SANITY", "平台讓分方向與美盤熱門相反")
 
     # G6 and pricing
-    _price(d, market, us_market, giver, gc, ref, ctx)
+    reason = _price(d, market, us_market, giver, gc, ref, ctx)
     if d.tier is None:
-        d.fail("NB-TIER-C", "需要換算，分布尚未驗證" if _tier_b(ctx) is None else "換算距離超出範圍")
+        d.fail("NB-TIER-C", reason or ("需要換算，分布尚未驗證" if _tier_b(ctx, us_market) is None
+                                      else "換算距離超出範圍"))
 
     # G7
     eligible = ctx.final_eligible.get(game.label) if ctx.final_eligible is not None else None
@@ -338,9 +339,12 @@ def _evaluate(game: BoardGame, market: Market, side: str, laying: bool, gc: Game
     return d
 
 
-def _tier_b(ctx: PassContext):
-    """The distribution provider, only while cfg:distribution.status is VALIDATED (RULES R-6.4)."""
+def _tier_b(ctx: PassContext, us_market: str):
+    """The distribution provider, only while cfg:distribution.status is VALIDATED and only
+    for the markets VALIDATION.md validated (RULES R-6.4)."""
     if ctx.tier_b is None or ctx.cfg.get("distribution.status") != "VALIDATED":
+        return None
+    if us_market not in (ctx.cfg.get("distribution.validated_markets") or ()):
         return None
     return ctx.tier_b
 
@@ -350,18 +354,23 @@ def _fair_line(d: Decision, market: Market, us_market: str, giver: str, gc: Game
     if us_market == "h2h":
         return
     display = ctx.cfg.get("anchor.devig_display_method")
-    tb = _tier_b(ctx)
+    tb = _tier_b(ctx, us_market)
     if tb is not None:
         ref = gc.line(us_market, d.l_ref)
-        anchored, _ = tb.anchored(us_market, d.l_ref, ref.probs[display])
-        d.fair_line, d.fair_source = _to_giving(us_market, giver, anchored.fair_point()), "distribution"
-    else:
-        home_value = -d.l_ref if us_market == "spreads" else d.l_ref
-        d.fair_line, d.fair_source = _to_giving(us_market, giver, home_value), "l_ref"
+        try:
+            anchored, _ = tb.anchored(us_market, d.l_ref, ref.probs[display])
+        except ValueError:                  # the family has no history near this line
+            anchored = None
+        if anchored is not None:
+            d.fair_line, d.fair_source = _to_giving(us_market, giver, anchored.fair_point()), "distribution"
+            return
+    home_value = -d.l_ref if us_market == "spreads" else d.l_ref
+    d.fair_line, d.fair_source = _to_giving(us_market, giver, home_value), "l_ref"
 
 
 def _price(d: Decision, market: Market, us_market: str, giver: str, gc: GameConsensus, ref,
-           ctx: PassContext) -> None:
+           ctx: PassContext) -> str | None:
+    """Price the ticket at Tier A or B; returns why not when it cannot translate."""
     cfg = ctx.cfg
     methods = tuple(cfg.get("anchor.devig_methods"))
     legs = market.line.legs if market.line is not None else (Leg(0.5, 1.0),)
@@ -375,16 +384,20 @@ def _price(d: Decision, market: Market, us_market: str, giver: str, gc: GameCons
         for m in methods:
             sigma_books[m] = max(gc.line_for_point(us_market, giver, x)[0].sigma_books(m) for x in points)
     else:
-        tb = _tier_b(ctx)
+        tb = _tier_b(ctx, us_market)
         if tb is None or us_market == "h2h":
-            return
+            return None
         ref_giving = _to_giving(us_market, giver, -d.l_ref if us_market == "spreads" else d.l_ref)
         if max(abs(leg.line - ref_giving) for leg in legs) > cfg.get(f"tiers.tier_b_max_gap.{_scale(market)}"):
-            return
+            return None
         d.tier, covers = "B", {}
         ref_point = -d.l_ref if us_market == "spreads" else d.l_ref
         for m in methods:
-            anchored, alternative = tb.anchored(us_market, d.l_ref, ref.probs[m])
+            try:
+                anchored, alternative = tb.anchored(us_market, d.l_ref, ref.probs[m])
+            except ValueError:              # the family has no history near this line
+                d.tier = None
+                return "換算失敗：分布對不上美盤機率"
             covers[m] = _giving_cover(us_market, giver, anchored.cover)
             sigma_books[m] = ref.sigma_books(m)
             for x in points:

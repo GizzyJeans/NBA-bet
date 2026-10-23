@@ -21,7 +21,8 @@ def run(cfg, b=None, gc="default", exposure=0.0, **ctx_overrides):
 
 @pytest.fixture
 def validated(cfg):
-    return with_values(cfg, **{"distribution.status": "VALIDATED"})
+    return with_values(cfg, **{"distribution.status": "VALIDATED",
+                               "distribution.validated_markets": ["spreads", "totals"]})
 
 
 def tier_b():
@@ -106,6 +107,16 @@ def test_translation_needs_a_validated_distribution(cfg, validated):
     assert run(cfg)[("handicap", "home")].primary == "NB-TIER-C"
     assert run(cfg, tier_b=tier_b())[("handicap", "home")].primary == "NB-TIER-C"   # status not VALIDATED
     assert run(validated, tier_b=tier_b())[("handicap", "home")].codes == []
+    totals_only = with_values(validated, **{"distribution.validated_markets": ["totals"]})
+    assert run(totals_only, tier_b=tier_b())[("handicap", "home")].primary == "NB-TIER-C"
+
+
+def test_failed_anchoring_fails_closed(validated):
+    class Unanchorable(HypotheticalTierB):
+        def anchored(self, market, ref_line, p_ref):
+            raise ValueError("no history near this line")
+    d = run(validated, tier_b=Unanchorable())[("handicap", "home")]
+    assert d.primary == "NB-TIER-C" and d.fair_source == "l_ref"
 
 
 def test_tier_b_gap_limit(validated):

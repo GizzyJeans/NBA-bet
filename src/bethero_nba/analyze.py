@@ -19,7 +19,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import cli, consensus, context, edge, injuries, ledger, net, oddsapi, report
+from . import cli, consensus, context, dist, edge, injuries, ledger, net, oddsapi, report
 from .platform import load_board
 
 
@@ -95,9 +95,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.injuries:
         eligible, blocking, report_ts = load_injuries(args.injuries, board, cfg, now)
 
+    tier_b = None
+    if cfg.get("distribution.status") == "VALIDATED":
+        tier_b = dist.load_tier_b(root / "data" / "dist", cfg.get("distribution.validated_markets"),
+                                  cfg.get("distribution.selected_method"))
     ctx = edge.PassContext(cfg=cfg, analysis_ts=now, platform_ts=board.platform_ts,
                            ts_source=board.ts_source, us_ts=us_ts, final_eligible=eligible,
-                           injury_report_ts=report_ts, blocking=blocking, tier_b=None, model=None)
+                           injury_report_ts=report_ts, blocking=blocking, tier_b=tier_b, model=None)
     methods = tuple(cfg.get("anchor.devig_methods"))
     decisions, consensuses = [], {}
     for game in board.games:

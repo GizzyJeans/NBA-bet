@@ -307,6 +307,10 @@ distribution:
     value: UNAVAILABLE
     status: RULE
     source: "no validated distribution yet, so Tier B is off (RULES R-6.4)"
+  validated_markets:
+    value: []
+    status: RULE
+    source: "VALIDATION.md §0.3 Status: Tier B is used only for the markets listed here"
   include_overtime:
     value: true
     status: CONFIRMED

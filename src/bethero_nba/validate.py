@@ -1,112 +1,323 @@
-"""Validation harness for rules/nba/VALIDATION.md (RULES R-7.4, R-8.6, Phase 3).
+"""Validation harness for rules/nba/VALIDATION.md (RULES R-7.4, R-5.3, R-8.6; Phase 3).
 
     python -m bethero_nba.validate --history data/history/games.csv \
-        --holdout 2024-25,2025-26 --out rules/nba/VALIDATION.md
+        --out rules/nba/VALIDATION.md --write-dist data/dist
 
-Three checks, each with N reported:
+Implements the criteria VALIDATION.md §0 declared before any data was loaded
+(D4, S1, V1-V4, DV1, M1-M3 and the §0.7 addendum). The history file must come
+with the provenance `python -m bethero_nba.history` writes next to it (D1).
+Results replace everything below `RESULTS_MARKER` in the output file; the
+criteria above it are never rewritten.
 
-1. Distributions: empirical vs discretized normal on holdout seasons, log
-   loss of win / push / lose for tickets at offsets around the closing line
-   (where translation happens), plus calibration and the bug-detection bands.
-2. De-vig methods: log loss and Brier of the closing moneyline's de-vigged home
-   win probability against results, per method (needs moneyline columns).
-3. Model: walk-forward MAE against the closing spread and total, and Brier and
-   log loss of the home win probability, by season phase.
+Distributions are scored the way Tier B uses them: a ticket at the closing
+line plus an offset, seen from the side laying the points (or the over), wins,
+pushes or loses, and each family is charged the log loss of what happened.
+`--write-dist` saves both families of every market as aggregate counts (no
+game rows, D5) for the engine; the engine uses them only for markets the
+config lists as validated.
 
-Nothing here runs without a history file with documented provenance.
+The harness decides nothing by itself: it prints the values the pre-declared
+rules give, and the config is edited by hand with VALIDATION.md as the source.
 """
 
 from __future__ import annotations
 
 import argparse
 import math
-from collections import defaultdict
-from dataclasses import dataclass
-from datetime import date
+from bisect import bisect_right
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
+from itertools import accumulate, groupby
 from pathlib import Path
 
-from . import cli, model
-from .dist import EmpiricalFamily, HistoryRow, NormalFamily, cover_from_pmf, load_history
+from . import cli, history, model
+from .dist import EmpiricalFamily, HistoryRow, NormalFamily, load_history, save_families
 from .odds import american_to_decimal, devig
 
-OFFSETS = (-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5)
+OFFSETS = (-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0)        # §0.3
+BANDWIDTHS = (0.5, 1.0, 1.5, 2.0, 3.0)                            # V1
+K_GRID = (5, 10, 20, 40)                                          # M1
+REFIT_EVERY, MIN_GAMES = 50, 30                                   # M1
+TRAIN_FROM = "2014-15"                                            # S1
+Z = 1.96                                                          # V3
 EPS = 1e-12
-
-
-@dataclass(frozen=True)
-class OffsetResult:
-    offset: float
-    n: int
-    log_loss_empirical: float
-    log_loss_normal: float
-    predicted_win: float      # mean predicted P(win), empirical
-    observed_win: float
-
-
-def _point(market: str, line: float) -> float:
-    return -line if market == "spreads" else line
-
-
-def _outcome_logloss(pmf: dict[int, float], x: float, line: float) -> float:
-    """-log P(observed outcome) for a ticket laying `line` (win above, push at, lose below)."""
-    if abs(line - round(line)) < 1e-9:
-        k = int(round(line))
-        p = cover_from_pmf(pmf, line) if x > line else (pmf.get(k, 0.0) if x == k else
-                                                        1 - cover_from_pmf(pmf, line - 0.5))
-    else:
-        p = cover_from_pmf(pmf, line) if x > line else 1 - cover_from_pmf(pmf, line)
-    return -math.log(max(p, EPS))
-
-
-def distribution_check(train: list[HistoryRow], holdout: list[HistoryRow], market: str, *,
-                       bucket_width: float, bandwidth: float) -> dict:
-    emp = EmpiricalFamily.fit(train, market, bucket_width=bucket_width, bandwidth=bandwidth)
-    nor = NormalFamily.fit(train, market)
-    rows = [r for r in holdout if (r.close_spread_home if market == "spreads" else r.close_total) is not None]
-    results = []
-    for offset in OFFSETS:
-        ll_e = ll_n = pred = obs = 0.0
-        for r in rows:
-            line = r.close_spread_home if market == "spreads" else r.close_total
-            x = r.margin if market == "spreads" else r.total
-            level = _point(market, line) + offset
-            pe, pn = emp.pmf(line), nor.pmf(line)
-            ll_e += _outcome_logloss(pe, x, level)
-            ll_n += _outcome_logloss(pn, x, level)
-            pred += cover_from_pmf(pe, level)
-            obs += x > level
-        n = len(rows)
-        results.append(OffsetResult(offset, n, ll_e / n, ll_n / n, pred / n, obs / n))
-    residuals = [((r.margin if market == "spreads" else r.total) -
-                  _point(market, r.close_spread_home if market == "spreads" else r.close_total))
-                 for r in rows]
-    sd = math.sqrt(sum(e * e for e in residuals) / max(len(residuals) - 1, 1)) if residuals else float("nan")
-    winner = "empirical" if sum(o.log_loss_empirical for o in results) < sum(o.log_loss_normal for o in results) else "normal"
-    return {"market": market, "n_train": len(train), "n_holdout": len(rows), "offsets": results,
-            "residual_sd": sd, "normal_sigma": nor.sigma, "winner": winner}
-
-
-def devig_check(rows: list[HistoryRow], methods: tuple[str, ...]) -> dict[str, dict[str, float]]:
-    usable = [r for r in rows if r.close_ml_home is not None and r.close_ml_away is not None]
-    out = {}
-    for m in methods:
-        probs, outcomes = [], []
-        for r in usable:
-            p = devig([american_to_decimal(r.close_ml_home), american_to_decimal(r.close_ml_away)], m)[0]
-            probs.append(p)
-            outcomes.append(1 if r.margin > 0 else 0)
-        if usable:
-            out[m] = {"n": len(usable), "log_loss": model.log_loss(probs, outcomes),
-                      "brier": model.brier(probs, outcomes)}
-    return out
-
-
+MARKETS = ("spreads", "totals")
+SCALE = {"spreads": "spread", "totals": "total"}
+BAND_KEY = {"spreads": "margin_sigma", "totals": "total_sigma"}
 BUBBLE_START = date(2020, 7, 30)
+RESULTS_MARKER = ("<!-- Everything below is generated by `python -m bethero_nba.validate` and replaced "
+                  "on every run. The criteria above are not. -->")
+GROUPS = {
+    "spreads": ((0.0, 2.5, "0-2.5"), (3.0, 5.5, "3-5.5"), (6.0, 8.5, "6-8.5"), (9.0, 11.5, "9-11.5"),
+                (12.0, 99.0, "12+")),
+    "totals": ((0.0, 214.5, "<215"), (215.0, 224.5, "215-224.5"), (225.0, 234.5, "225-234.5"),
+               (235.0, 999.0, "235+")),
+}
 
 
 def excluded(row: HistoryRow) -> bool:
-    """cfg:distribution.exclude: the 2019-20 bubble games and the 2020-21 season (RULES R-7.3)."""
+    """D4: the 2019-20 bubble games and the 2020-21 season (RULES R-7.3)."""
     return row.season == "2020-21" or (row.season == "2019-20" and row.date >= BUBBLE_START)
+
+
+# ------------------------------------------------------------------ seasons
+
+
+@dataclass(frozen=True)
+class Roles:
+    train: tuple[str, ...]
+    holdout: tuple[str, ...]
+    sensitivity_train: tuple[str, ...]     # every usable season before the holdout
+    later: tuple[str, ...]                 # usable seasons after the holdout: descriptive only
+
+
+def roles(provenance: dict, rows: list[HistoryRow]) -> Roles:
+    """S1, on rows already filtered by D4."""
+    usable = sorted({r.season for r in rows})
+    complete = [s for s in usable if provenance["seasons"].get(s, {}).get("complete")]
+    if len(complete) < 2:
+        raise ValueError("S1 needs two complete seasons")
+    holdout = tuple(complete[-2:])
+    earlier = tuple(s for s in usable if s < holdout[0])
+    return Roles(tuple(s for s in earlier if s >= TRAIN_FROM), holdout, earlier,
+                 tuple(s for s in usable if s > holdout[-1]))
+
+
+# ------------------------------------------------------------ distributions
+
+
+def line_of(row: HistoryRow, market: str) -> float | None:
+    return row.close_spread_home if market == "spreads" else row.close_total
+
+
+def oriented(row: HistoryRow, market: str) -> tuple[float, int, bool]:
+    """(base, x, flip): the line and outcome seen from the side laying the points
+    (a pick'em from the home side, §0.7 A4) or from the over."""
+    if market == "totals":
+        return row.close_total, row.total, False
+    s = row.close_spread_home
+    flip = s > 0
+    return abs(s), (-row.margin if flip else row.margin), flip
+
+
+class Dist:
+    """A pmf in the oriented space, with P(X > level) by binary search."""
+
+    def __init__(self, pmf: dict[int, float], flip: bool):
+        items = sorted(((-k if flip else k), p) for k, p in pmf.items())
+        self.ks = [k for k, _ in items]
+        self.cum = list(accumulate(p for _, p in items))
+        self.mass = dict(items)
+
+    def above(self, level: float) -> float:
+        i = bisect_right(self.ks, level)
+        return self.cum[-1] - (self.cum[i - 1] if i else 0.0)
+
+    def ticket(self, level: float) -> tuple[float, float, float]:
+        win = self.above(level)
+        push = self.mass.get(int(round(level)), 0.0) if abs(level - round(level)) < 1e-9 else 0.0
+        return win, push, max(1.0 - win - push, 0.0)
+
+
+@dataclass
+class Score:
+    n: int = 0
+    loss: float = 0.0                      # summed over games and offsets
+    impossible: int = 0                    # outcomes that happened at probability below EPS
+    win_pred: dict = field(default_factory=lambda: defaultdict(float))
+    win_obs: dict = field(default_factory=lambda: defaultdict(float))
+    push_pred: dict = field(default_factory=lambda: defaultdict(float))
+    push_obs: dict = field(default_factory=lambda: defaultdict(float))
+
+    @property
+    def log_loss(self) -> float:
+        return self.loss / (self.n * len(OFFSETS)) if self.n else float("nan")
+
+    def deviation(self, offset: float) -> float:
+        return self.win_obs[offset] / self.n - self.win_pred[offset] / self.n
+
+
+def score(family, rows: list[HistoryRow], market: str) -> Score:
+    sc, cache = Score(), {}
+    for r in rows:
+        line = line_of(r, market)
+        if line not in cache:
+            cache[line] = Dist(family.pmf(line), market == "spreads" and line > 0)
+        dist = cache[line]
+        base, x, _ = oriented(r, market)
+        sc.n += 1
+        for o in OFFSETS:
+            level = base + o
+            win, push, lose = dist.ticket(level)
+            p = win if x > level else (push if x == level else lose)
+            sc.impossible += p < EPS
+            sc.loss -= math.log(max(p, EPS))
+            sc.win_pred[o] += win
+            sc.win_obs[o] += x > level
+            sc.push_pred[o] += push
+            sc.push_obs[o] += x == level
+    return sc
+
+
+def supported(rows: list[HistoryRow], train: list[HistoryRow], market: str) -> list[HistoryRow]:
+    """Rows whose line has training history within the narrowest kernel's reach (§0.7 A3),
+    so every bandwidth and both families are scored on the same games."""
+    reach = 4 * min(BANDWIDTHS)
+    lines = sorted({line_of(r, market) for r in train if line_of(r, market) is not None})
+    out = []
+    for r in rows:
+        s = line_of(r, market)
+        if s is None:
+            continue
+        i = bisect_right(lines, s)
+        if any(abs(lines[j] - s) <= reach + 1e-9 for j in (i - 1, i) if 0 <= j < len(lines)):
+            out.append(r)
+    return out
+
+
+def choose_bandwidth(train: list[HistoryRow], market: str, bucket_width: float) -> tuple[float, list]:
+    """V1: leave-one-season-out over the training seasons, mean log loss over O."""
+    seasons = sorted({r.season for r in train})
+    if len(seasons) < 2:
+        raise ValueError("V1 needs at least two training seasons")
+    table = []
+    for bw in BANDWIDTHS:
+        loss = n = 0.0
+        for s in seasons:
+            fit_rows = [r for r in train if r.season != s]
+            test = supported([r for r in train if r.season == s], fit_rows, market)
+            sc = score(EmpiricalFamily.fit(fit_rows, market, bucket_width=bucket_width, bandwidth=bw),
+                       test, market)
+            loss, n = loss + sc.loss, n + sc.n
+        table.append((bw, int(n), loss / (n * len(OFFSETS))))
+    return min(table, key=lambda t: t[2])[0], table
+
+
+@dataclass(frozen=True)
+class V3Row:
+    offset: float
+    n: int
+    predicted: float
+    observed: float
+    tolerance: float
+    push_predicted: float
+    push_observed: float
+
+    @property
+    def ok(self) -> bool:
+        return abs(self.observed - self.predicted) <= self.tolerance
+
+
+def v3_rows(sc: Score) -> list[V3Row]:
+    out = []
+    for o in OFFSETS:
+        p = sc.win_pred[o] / sc.n
+        out.append(V3Row(o, sc.n, p, sc.win_obs[o] / sc.n, Z * math.sqrt(p * (1 - p) / sc.n),
+                         sc.push_pred[o] / sc.n, sc.push_obs[o] / sc.n))
+    return out
+
+
+def allowed_gap(rows: list[V3Row], placeholder: float) -> float:
+    """Gap rule: the largest |offset| <= placeholder with V3 holding there and at every
+    smaller offset; 0 when V3 fails at the closing line itself."""
+    ok = {r.offset: r.ok for r in rows}
+    best = 0.0
+    for g in sorted({abs(o) for o in OFFSETS}):
+        if g > placeholder + 1e-9 or not all(ok[o] for o in OFFSETS if abs(o) <= g + 1e-9):
+            break
+        best = g
+    return best if ok[0.0] else 0.0
+
+
+@dataclass
+class MarketResult:
+    market: str
+    train_seasons: tuple[str, ...]
+    bandwidth: float
+    cv: list
+    n_train: int
+    n_holdout: int
+    n_scored: int
+    empirical: Score
+    normal: Score
+    selected: str
+    v3: list[V3Row]
+    resid_mean: float
+    resid_sd: float
+    band: tuple[float, float]
+    placeholder_gap: float
+    gap: float
+    groups: list
+    families: tuple
+
+    @property
+    def v4_ok(self) -> bool:
+        return self.band[0] <= self.resid_sd <= self.band[1]
+
+    @property
+    def validated(self) -> bool:
+        return self.v4_ok and self.gap >= 0.5
+
+
+def evaluate_market(train: list[HistoryRow], holdout: list[HistoryRow], market: str, cfg) -> MarketResult:
+    width = cfg.get("distribution.bucket_width")
+    bw, cv = choose_bandwidth(train, market, width)
+    emp = EmpiricalFamily.fit(train, market, bucket_width=width, bandwidth=bw)
+    nor = NormalFamily.fit(train, market)
+    rows = [r for r in holdout if line_of(r, market) is not None]
+    scored = supported(rows, train, market)
+    se, sn = score(emp, scored, market), score(nor, scored, market)
+    selected = "empirical" if se.log_loss < sn.log_loss else "normal"            # V2
+    v3 = v3_rows(se if selected == "empirical" else sn)
+    residuals = [(r.margin + r.close_spread_home) if market == "spreads" else (r.total - r.close_total)
+                 for r in rows]
+    mean = sum(residuals) / len(residuals)
+    sd = math.sqrt(sum((e - mean) ** 2 for e in residuals) / (len(residuals) - 1))
+    band = tuple(cfg.get(f"distribution.bug_bands.{BAND_KEY[market]}"))
+    placeholder = cfg.get(f"tiers.tier_b_max_gap.{SCALE[market]}")
+    groups = []
+    for lo, hi, label in GROUPS[market]:
+        sub = [r for r in scored if lo <= oriented(r, market)[0] <= hi]
+        if sub:
+            ge, gn = score(emp, sub, market), score(nor, sub, market)
+            groups.append((label, len(sub), ge.log_loss, gn.log_loss,
+                           max(abs(ge.deviation(o)) for o in OFFSETS),
+                           max(abs(gn.deviation(o)) for o in OFFSETS), Z * 0.5 / math.sqrt(len(sub))))
+    return MarketResult(market, tuple(sorted({r.season for r in train})), bw, cv, len(train), len(rows),
+                        len(scored), se, sn, selected, v3, mean, sd, band, placeholder,
+                        allowed_gap(v3, placeholder), groups, (emp, nor))
+
+
+# ------------------------------------------------------------------ de-vig
+
+
+def devig_scores(rows: list[HistoryRow], methods: tuple[str, ...]) -> dict[str, dict]:
+    """DV1: each method's home-win probability from the closing moneyline against results."""
+    usable = [r for r in rows if r.close_ml_home is not None and r.close_ml_away is not None]
+    out = {}
+    for m in methods:
+        losses, briers = [], []
+        for r in usable:
+            p = devig([american_to_decimal(r.close_ml_home), american_to_decimal(r.close_ml_away)], m)[0]
+            won = r.margin > 0
+            losses.append(-math.log(max(p if won else 1 - p, EPS)))
+            briers.append((p - won) ** 2)
+        if usable:
+            out[m] = {"n": len(usable), "losses": losses, "log_loss": sum(losses) / len(losses),
+                      "brier": sum(briers) / len(briers)}
+    return out
+
+
+def paired(a: list[float], b: list[float]) -> tuple[float, float]:
+    """Mean of a - b and its standard error."""
+    d = [x - y for x, y in zip(a, b)]
+    mean = sum(d) / len(d)
+    var = sum((x - mean) ** 2 for x in d) / (len(d) - 1)
+    return mean, math.sqrt(var / len(d))
+
+
+# ------------------------------------------------------------------- model
 
 
 def phase_of(games_played: int, total_games: int = 82) -> str:
@@ -117,67 +328,310 @@ def phase_of(games_played: int, total_games: int = 82) -> str:
     return "middle"
 
 
-def model_check(rows: list[HistoryRow], k: float, refit_every: int = 50,
-                min_games: int = 30) -> dict[str, dict]:
-    """Walk forward through one or more seasons; predictions use only earlier games
-    of the same season, and start once `min_games` of them exist."""
-    rows = sorted(rows, key=lambda r: r.date)
-    by_phase: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
-    played: dict[tuple[str, str], int] = defaultdict(int)
-    ratings = None
-    history: list[model.GameResult] = []
-    for i, r in enumerate(rows):
-        if ratings is None or i % refit_every == 0:
-            season_games = [g for g, row in zip(history, rows) if row.season == r.season]
-            ratings = model.fit(season_games, k) if len(season_games) >= min_games else None
-        if ratings is not None and r.close_spread_home is not None and r.close_total is not None:
-            pred = ratings.predict(r.home, r.away)
-            phase = phase_of(min(played[(r.season, r.home)], played[(r.season, r.away)]))
-            bucket = by_phase[phase]
-            bucket["spread_pred"].append(pred["home_margin"])
-            bucket["spread_close"].append(-r.close_spread_home)
-            bucket["total_pred"].append(pred["total"])
-            bucket["total_close"].append(r.close_total)
-            bucket["p"].append(ratings.p_home_win(r.home, r.away))
-            bucket["won"].append(1 if r.margin > 0 else 0)
-        history.append(model.GameResult(r.home, r.away, r.home_score, r.away_score))
-        played[(r.season, r.home)] += 1
-        played[(r.season, r.away)] += 1
-    report = {}
-    for phase, b in by_phase.items():
-        report[phase] = {"n": len(b["p"]),
-                         "mae_spread": model.mae(b["spread_pred"], b["spread_close"]),
-                         "mae_total": model.mae(b["total_pred"], b["total_close"]),
-                         "brier": model.brier(b["p"], b["won"]),
-                         "log_loss": model.log_loss(b["p"], b["won"])}
-    return report
+@dataclass(frozen=True)
+class Prediction:
+    row: HistoryRow
+    phase: str
+    margin: float
+    total: float
+    p_home: float
 
 
-def markdown(dist_results: list[dict], devig_results: dict, model_results: dict, source: str) -> str:
-    lines = ["# Validation", "", f"History: {source}", ""]
-    for d in dist_results:
-        lines += [f"## Distribution: {d['market']}", "",
-                  f"Train N = {d['n_train']}, holdout N = {d['n_holdout']}; holdout residual SD "
-                  f"{d['residual_sd']:.2f}; normal sigma {d['normal_sigma']:.2f}; lower log loss: {d['winner']}.", "",
-                  "| offset | N | log loss empirical | log loss normal | predicted win | observed win |",
-                  "|---|---|---|---|---|---|"]
-        for o in d["offsets"]:
-            lines.append(f"| {o.offset:+.1f} | {o.n} | {o.log_loss_empirical:.4f} | {o.log_loss_normal:.4f} "
-                         f"| {o.predicted_win:.4f} | {o.observed_win:.4f} |")
-        lines.append("")
-    if devig_results:
-        lines += ["## De-vig methods (closing moneyline vs results)", "",
-                  "| method | N | log loss | Brier |", "|---|---|---|---|"]
-        for m, r in devig_results.items():
-            lines.append(f"| {m} | {r['n']} | {r['log_loss']:.5f} | {r['brier']:.5f} |")
-        lines.append("")
-    if model_results:
-        lines += ["## Model (walk-forward)", "", "| phase | N | MAE spread | MAE total | Brier | log loss |",
-                  "|---|---|---|---|---|---|"]
-        for phase, r in model_results.items():
-            lines.append(f"| {phase} | {r['n']} | {r['mae_spread']:.2f} | {r['mae_total']:.2f} "
-                         f"| {r['brier']:.4f} | {r['log_loss']:.4f} |")
-    return "\n".join(lines) + "\n"
+def walk_forward(rows: list[HistoryRow], k: float, refit_every: int = REFIT_EVERY,
+                 min_games: int = MIN_GAMES) -> list[Prediction]:
+    """M1, within each season and without a prior: a game is predicted from the
+    season's games on earlier dates only; ratings are refitted once `min_games`
+    exist and then every `refit_every` games. The phase is that of the team with
+    fewer games played (§0.7 A6)."""
+    out = []
+    by_season: dict[str, list[HistoryRow]] = defaultdict(list)
+    for r in rows:
+        by_season[r.season].append(r)
+    for season in sorted(by_season):
+        played: Counter = Counter()
+        past: list[model.GameResult] = []
+        ratings, fitted_at = None, 0
+        for _, day in groupby(sorted(by_season[season], key=lambda r: r.date), key=lambda r: r.date):
+            day = list(day)
+            if len(past) >= min_games and (ratings is None or len(past) - fitted_at >= refit_every):
+                ratings, fitted_at = model.fit(past, k), len(past)
+            if ratings is not None:
+                for r in day:
+                    pred = ratings.predict(r.home, r.away)
+                    out.append(Prediction(r, phase_of(min(played[r.home], played[r.away])),
+                                          pred["home_margin"], pred["total"], ratings.p_home_win(r.home, r.away)))
+            for r in day:
+                past.append(model.GameResult(r.home, r.away, r.home_score, r.away_score))
+                played[r.home] += 1
+                played[r.away] += 1
+    return out
+
+
+def percentile(values: list[float], q: float) -> float:
+    """Linear interpolation between order statistics."""
+    xs = sorted(values)
+    pos = (len(xs) - 1) * q
+    lo = math.floor(pos)
+    hi = min(lo + 1, len(xs) - 1)
+    return xs[lo] + (xs[hi] - xs[lo]) * (pos - lo)
+
+
+def floor1(x: float) -> float:
+    """Round down to 0.1 point: a lower veto distance blocks more (§0.7 A8)."""
+    return math.floor(x * 10 + 1e-9) / 10
+
+
+def market_p_home(r: HistoryRow, method: str) -> float | None:
+    if r.close_ml_home is None or r.close_ml_away is None:
+        return None
+    return devig([american_to_decimal(r.close_ml_home), american_to_decimal(r.close_ml_away)], method)[0]
+
+
+def model_phase_table(preds: list[Prediction], method: str) -> list[tuple]:
+    rows = []
+    for phase in ("games 1-20", "middle", "last 20", "all"):
+        ps = [p for p in preds if phase == "all" or p.phase == phase]
+        ps = [p for p in ps if market_p_home(p.row, method) is not None]
+        if not ps:
+            continue
+        won = [1 if p.row.margin > 0 else 0 for p in ps]
+        mkt = [market_p_home(p.row, method) for p in ps]
+        rows.append((phase, len(ps),
+                     model.mae([p.margin for p in ps], [-p.row.close_spread_home for p in ps]),
+                     model.mae([p.total for p in ps], [p.row.close_total for p in ps]),
+                     model.brier([p.p_home for p in ps], won), model.log_loss([p.p_home for p in ps], won),
+                     model.brier(mkt, won), model.log_loss(mkt, won),
+                     model.mae([p.margin for p in ps], [p.row.margin for p in ps]),
+                     model.mae([-p.row.close_spread_home for p in ps], [p.row.margin for p in ps]),
+                     model.mae([p.total for p in ps], [p.row.total for p in ps]),
+                     model.mae([p.row.close_total for p in ps], [p.row.total for p in ps])))
+    return rows
+
+
+# ------------------------------------------------------------------ report
+
+
+def _f(x: float, digits: int = 4) -> str:
+    return f"{x:.{digits}f}"
+
+
+def _seasons(seasons) -> str:
+    seasons = list(seasons)
+    return f"{seasons[0]} to {seasons[-1]} ({len(seasons)} seasons)" if len(seasons) > 2 else ", ".join(seasons)
+
+
+def render(ctx: dict) -> str:
+    prov, roles_ = ctx["provenance"], ctx["roles"]
+    src = prov["source"]
+    out = [RESULTS_MARKER, "", f"## Results ({ctx['run_date']})", "",
+           "Every line below was produced by `python -m bethero_nba.validate` from the history file "
+           "described in R1. **The source does not say whether its lines are closing lines; read every "
+           "\"closing\" below as \"the source's line, timing not stated\" (D1).**", "",
+           "### R1 Dataset (D1-D5)", "",
+           f"- Source: [{src['repo'].split('github.com/')[1]}]({src['repo']}) at commit `{src['commit'][:7]}` "
+           f"({src['commit_date']}), file `{src['file']}`, SHA-256 `{src['sha256_checked']}`. "
+           f"Licence: {src['licence']}; used locally only, game rows not committed (D5).",
+           f"- Converted by `python -m bethero_nba.history` at {prov['converted_at']}.",
+           "- Lines: 2007-08 to 2021-22 from the " + history.SBR_ARCHIVE + "; 2022-23 onward from the "
+           + history.SBR_SCOREBOARD + ".",
+           f"- Rules applied: D2 {prov['rules']['D2']}; D3 {prov['rules']['D3']}; moneyline: "
+           f"{prov['rules']['moneyline']}; spread side: {prov['rules']['spread side']}; "
+           f"contradictions: {prov['rules']['contradiction']}.", "",
+           history.summary(prov), "",
+           f"D4 excluded {ctx['excluded']} games (2019-20 from 2020-07-30: {ctx['excluded_bubble']}; "
+           f"2020-21: {ctx['excluded_2021']}). D3 had already cut the 2019-20 regular season at its last "
+           "10-game date before the suspension.", "",
+           "### R2 Seasons (S1)", "",
+           f"- Training: {_seasons(roles_.train)}, N = {ctx['n_train']} games.",
+           f"- Holdout: {', '.join(roles_.holdout)}, N = {ctx['n_holdout']} games.",
+           f"- Sensitivity training (decides nothing): {_seasons(roles_.sensitivity_train)}, "
+           f"N = {ctx['n_sensitivity']}.",
+           f"- After the holdout (descriptive only, §0.7 A2): {', '.join(roles_.later) or 'none'}, "
+           f"N = {ctx['n_later']}.", ""]
+
+    for res in ctx["markets"]:
+        name = "Spreads (home margin)" if res.market == "spreads" else "Totals"
+        out += [f"### R3 {name}", "",
+                f"Training N = {res.n_train}; holdout N = {res.n_holdout}, of which {res.n_scored} have "
+                f"training history within reach (§0.7 A3) and are scored.", "",
+                "**V1 bandwidth** (leave one training season out, mean log loss over O):", "",
+                "| bandwidth | N scored | log loss |", "|---|---|---|"]
+        out += [f"| {bw:g} | {n} | {_f(ll, 5)} |" for bw, n, ll in res.cv]
+        emp, nor = res.families
+        out += ["", f"Chosen: **{res.bandwidth:g}**.", "",
+                f"**V2 families on holdout** (mean log loss over O; lower is better): empirical "
+                f"{_f(res.empirical.log_loss, 5)}, normal {_f(res.normal.log_loss, 5)} "
+                f"(normal fitted on training: mean residual {nor.offset:+.2f}, sigma {nor.sigma:.2f}). "
+                f"Outcomes given probability below 1e-12: empirical {res.empirical.impossible}, "
+                f"normal {res.normal.impossible}. Selected: **{res.selected}**.", "",
+                f"**V3 calibration of the {res.selected} family** (cover = the laying side or the over wins "
+                "outright; tolerance 1.96 x sqrt(p(1-p)/N)):", "",
+                "| offset | N | predicted cover | observed cover | difference | tolerance | V3 | "
+                "predicted push | observed push |",
+                "|---|---|---|---|---|---|---|---|---|"]
+        for v in res.v3:
+            out.append(f"| {v.offset:+.1f} | {v.n} | {_f(v.predicted)} | {_f(v.observed)} | "
+                       f"{v.observed - v.predicted:+.4f} | {_f(v.tolerance)} | {'pass' if v.ok else 'FAIL'} | "
+                       f"{_f(v.push_predicted)} | {_f(v.push_observed)} |")
+        other = res.normal if res.selected == "empirical" else res.empirical
+        fails = [f"{o:+.1f}" for o in OFFSETS if abs(other.deviation(o)) > Z * math.sqrt(
+            (other.win_pred[o] / other.n) * (1 - other.win_pred[o] / other.n) / other.n)]
+        out += ["", f"For comparison, the {'normal' if res.selected == 'empirical' else 'empirical'} family "
+                f"would fail V3 at: {', '.join(fails) or 'no offset'}.", "",
+                f"**V4 residual SD on holdout**: {res.resid_sd:.2f} (mean {res.resid_mean:+.2f}); band "
+                f"{res.band[0]:g}-{res.band[1]:g}: {'pass' if res.v4_ok else 'FAIL'}.", "",
+                f"**Gap**: placeholder {res.placeholder_gap:g}; V3 holds up to {res.gap:g}. "
+                f"**{'Validated' if res.validated else 'Not validated'}**; "
+                f"`tiers.tier_b_max_gap.{SCALE[res.market]}` = {res.gap:g}.", "",
+                "Calibration by line bucket (descriptive, decides nothing; max |observed - predicted| over O, "
+                "and the tolerance at p = 0.5 for that N):", "",
+                "| line | N | log loss empirical | log loss normal | max dev. empirical | max dev. normal | "
+                "tolerance |", "|---|---|---|---|---|---|---|"]
+        for label, n, lle, lln, de, dn, tol in res.groups:
+            out.append(f"| {label} | {n} | {_f(lle, 5)} | {_f(lln, 5)} | {_f(de)} | {_f(dn)} | {_f(tol)} |")
+        out.append("")
+
+    out += ["### R4 Sensitivity and later seasons (decide nothing)", "",
+            "| market | training | N train | bandwidth | log loss empirical | log loss normal | selected | "
+            "V3 holds up to |", "|---|---|---|---|---|---|---|---|"]
+    for res in ctx["sensitivity"]:
+        out.append(f"| {res.market} | {_seasons(res.train_seasons)} | {res.n_train} | {res.bandwidth:g} | "
+                   f"{_f(res.empirical.log_loss, 5)} | {_f(res.normal.log_loss, 5)} | {res.selected} | "
+                   f"{res.gap:g} |")
+    if ctx["later"]:
+        out += ["", "Training-season families scored on the seasons after the holdout:", "",
+                "| market | N | log loss empirical | log loss normal | max dev. empirical | max dev. normal | "
+                "tolerance at p = 0.5 |", "|---|---|---|---|---|---|---|"]
+        for market, n, se, sn in ctx["later"]:
+            if n:
+                out.append(f"| {market} | {n} | {_f(se.log_loss, 5)} | {_f(sn.log_loss, 5)} | "
+                           f"{_f(max(abs(se.deviation(o)) for o in OFFSETS))} | "
+                           f"{_f(max(abs(sn.deviation(o)) for o in OFFSETS))} | {_f(Z * 0.5 / math.sqrt(n))} |")
+    out.append("")
+
+    dv_hold, dv_all, best = ctx["devig_holdout"], ctx["devig_all"], ctx["devig_best"]
+    out += ["### R5 De-vig methods (DV1)", "",
+            "Home-win probability from the two moneylines against results; overtime decides every game.", "",
+            "| method | holdout N | holdout log loss | holdout Brier | vs lowest (mean, SE) | all seasons N | "
+            "all log loss | all Brier |", "|---|---|---|---|---|---|---|---|"]
+    for m in dv_hold:
+        diff, se = paired(dv_hold[m]["losses"], dv_hold[best]["losses"])
+        out.append(f"| {m} | {dv_hold[m]['n']} | {_f(dv_hold[m]['log_loss'], 5)} | {_f(dv_hold[m]['brier'], 5)} "
+                   f"| {diff:+.5f} ({se:.5f}) | {dv_all[m]['n']} | {_f(dv_all[m]['log_loss'], 5)} | "
+                   f"{_f(dv_all[m]['brier'], 5)} |")
+    out += ["", f"Lowest holdout log loss: **{best}** (becomes `anchor.devig_display_method`; gating stays "
+            "worst-case).", ""]
+
+    out += ["### R6 Veto model (M1-M3)", "", "**M1 shrinkage k** (training seasons, walk-forward, MAE of "
+            "the model's home margin against the closing spread):", "", "| k | N | MAE spread |", "|---|---|---|"]
+    out += [f"| {k:g} | {n} | {mae:.3f} |" for k, n, mae in ctx["k_table"]]
+    out += ["", f"Chosen: **k = {ctx['k']:g}**.", "",
+            f"**M2 holdout by phase** (k = {ctx['k']:g}; market = the closing moneyline de-vigged with {best}):", "",
+            "| phase | N | MAE vs closing spread | MAE vs closing total | Brier model | Brier market | "
+            "log loss model | log loss market |", "|---|---|---|---|---|---|---|---|"]
+    for row in ctx["phases"]:
+        phase, n, ms, mt, bm, llm, bk, llk = row[:8]
+        out.append(f"| {phase} | {n} | {ms:.2f} | {mt:.2f} | {_f(bm)} | {_f(bk)} | {_f(llm)} | {_f(llk)} |")
+    out += ["", "Against results (MAE in points):", "",
+            "| phase | N | margin: model | margin: closing spread | total: model | total: closing total |",
+            "|---|---|---|---|---|---|"]
+    for row in ctx["phases"]:
+        phase, n = row[:2]
+        out.append(f"| {phase} | {n} | {row[8]:.2f} | {row[9]:.2f} | {row[10]:.2f} | {row[11]:.2f} |")
+    out += ["", "The trade-deadline split of R-8.6 is not evaluated: the dataset has no deadline dates.", "",
+            f"**M3** on holdout (N = {ctx['n_model']}): |model - closing| 80th percentile spread "
+            f"{ctx['p80']['spread']:.2f}, total {ctx['p80']['total']:.2f}; 60th percentile spread "
+            f"{ctx['p60']['spread']:.2f}, total {ctx['p60']['total']:.2f}. Rounded down to 0.1 (§0.7 A8). "
+            "`model.status` stays OFF.", ""]
+
+    out += ["### R7 Values the pre-declared rules give", "", "| key | value | rule |", "|---|---|---|"]
+    out += [f"| `{k}` | {v} | {why} |" for k, v, why in ctx["decisions"]]
+    return "\n".join(out) + "\n"
+
+
+def decisions(ctx: dict) -> list[tuple[str, str, str]]:
+    ms = {r.market: r for r in ctx["markets"]}
+    validated = [m for m in MARKETS if ms[m].validated]
+    rows = [("distribution.train_seasons", ", ".join(ctx["roles"].train), "S1"),
+            ("distribution.holdout_seasons", ", ".join(ctx["roles"].holdout), "S1"),
+            ("distribution.smoothing_bandwidth", ", ".join(f"{SCALE[m]} {ms[m].bandwidth:g}" for m in MARKETS), "V1"),
+            ("distribution.selected_method", ", ".join(f"{SCALE[m]} {ms[m].selected}" for m in MARKETS), "V2"),
+            ("distribution.validated_markets", ", ".join(validated) or "none", "V3, V4"),
+            ("distribution.status", "VALIDATED" if validated else "UNAVAILABLE", "Status")]
+    for m in MARKETS:
+        rows.append((f"tiers.tier_b_max_gap.{SCALE[m]}", f"{ms[m].gap:g}",
+                     "Gap" if ms[m].validated else "Gap (market not validated: Tier B stays off for it)"))
+    rows += [("anchor.devig_display_method", ctx["devig_best"], "DV1"),
+             ("model.prior_shrinkage_k_games", f"{ctx['k']:g}", "M1"),
+             ("model.model_veto_pts", f"spread {floor1(ctx['p80']['spread']):g}, total {floor1(ctx['p80']['total']):g}", "M3"),
+             ("model.model_downgrade_pts", f"spread {floor1(ctx['p60']['spread']):g}, total {floor1(ctx['p60']['total']):g}", "M3"),
+             ("model.status", "OFF", "M3: Eric decides")]
+    return rows
+
+
+def run(history_csv: Path, cfg) -> dict:
+    provenance = history.load_provenance(history_csv)
+    everything = load_history(history_csv)
+    rows = [r for r in everything if not excluded(r)]
+    roles_ = roles(provenance, rows)
+    pick = lambda seasons: [r for r in rows if r.season in seasons]      # noqa: E731
+    train, holdout = pick(roles_.train), pick(roles_.holdout)
+    sens, later = pick(roles_.sensitivity_train), pick(roles_.later)
+    markets = [evaluate_market(train, holdout, m, cfg) for m in MARKETS]
+    sensitivity = [evaluate_market(sens, holdout, m, cfg) for m in MARKETS]
+    later_scores = []
+    for res in markets:
+        sub = supported([r for r in later if line_of(r, res.market) is not None], train, res.market)
+        emp, nor = res.families
+        later_scores.append((res.market, len(sub), score(emp, sub, res.market), score(nor, sub, res.market)))
+    methods = tuple(cfg.get("anchor.devig_methods"))
+    dv_hold, dv_all = devig_scores(holdout, methods), devig_scores(rows, methods)
+    best = min(dv_hold, key=lambda m: dv_hold[m]["log_loss"])
+    k_table = []
+    for k in K_GRID:
+        preds = walk_forward(train, k)
+        k_table.append((k, len(preds), model.mae([p.margin for p in preds],
+                                                  [-p.row.close_spread_home for p in preds])))
+    k = min(k_table, key=lambda t: t[2])[0]
+    preds = walk_forward(holdout, k)
+    p80 = {"spread": percentile([abs(p.margin + p.row.close_spread_home) for p in preds], 0.8),
+           "total": percentile([abs(p.total - p.row.close_total) for p in preds], 0.8)}
+    p60 = {"spread": percentile([abs(p.margin + p.row.close_spread_home) for p in preds], 0.6),
+           "total": percentile([abs(p.total - p.row.close_total) for p in preds], 0.6)}
+    ctx = {"provenance": provenance, "roles": roles_, "cfg": cfg,
+           "run_date": datetime.now(timezone.utc).date().isoformat(),
+           "excluded": len(everything) - len(rows),
+           "excluded_bubble": sum(1 for r in everything if r.season == "2019-20" and excluded(r)),
+           "excluded_2021": sum(1 for r in everything if r.season == "2020-21"),
+           "n_train": len(train), "n_holdout": len(holdout), "n_sensitivity": len(sens), "n_later": len(later),
+           "markets": markets, "sensitivity": sensitivity, "later": later_scores,
+           "devig_holdout": dv_hold, "devig_all": dv_all, "devig_best": best,
+           "k_table": k_table, "k": k, "phases": model_phase_table(preds, best), "n_model": len(preds),
+           "p80": p80, "p60": p60}
+    ctx["decisions"] = decisions(ctx)
+    return ctx
+
+
+def write_results(path: Path, text: str) -> None:
+    """Keep everything above the marker; replace what follows it."""
+    current = path.read_text(encoding="utf-8") if path.exists() else ""
+    head = current.split(RESULTS_MARKER)[0].rstrip("\n")
+    path.write_text((head + "\n\n" if head else "") + text, encoding="utf-8", newline="\n")
+
+
+def write_dist(ctx: dict, directory: Path) -> list[Path]:
+    paths = []
+    for res in ctx["markets"]:
+        emp, nor = res.families
+        path = directory / f"{res.market}.json"
+        save_families(path, emp, nor, {
+            "train_seasons": list(res.train_seasons), "n_train": res.n_train,
+            "selected_method": res.selected, "validated": res.validated,
+            "source": f"{ctx['provenance']['source']['repo']}@{ctx['provenance']['source']['commit'][:7]} "
+                      f"{ctx['provenance']['source']['file']} sha256 {ctx['provenance']['source']['sha256_checked']}",
+            "validation": "rules/nba/VALIDATION.md", "generated": ctx["run_date"]})
+        paths.append(path)
+    return paths
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -186,25 +640,22 @@ def main(argv: list[str] | None = None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     cli.add_root(parser)
     parser.add_argument("--history", type=Path, required=True)
-    parser.add_argument("--holdout", required=True, help="comma-separated seasons, e.g. 2024-25,2025-26")
-    parser.add_argument("--bandwidth", type=float, default=1.0)
-    parser.add_argument("--k", type=float, default=10.0, help="model shrinkage, games per team")
-    parser.add_argument("--out", type=Path)
+    parser.add_argument("--out", type=Path, help="markdown file whose results section is replaced")
+    parser.add_argument("--write-dist", type=Path, help="directory for the aggregate family files")
     args = parser.parse_args(argv)
     cfg = cli.load_config(cli.resolve_root(args.root))
-    rows = [r for r in load_history(args.history) if not excluded(r)]
-    holdout_seasons = set(args.holdout.split(","))
-    train = [r for r in rows if r.season not in holdout_seasons]
-    holdout = [r for r in rows if r.season in holdout_seasons]
-    dists = [distribution_check(train, holdout, m, bucket_width=cfg.get("distribution.bucket_width"),
-                                bandwidth=args.bandwidth) for m in ("spreads", "totals")]
-    text = markdown(dists, devig_check(holdout, tuple(cfg.get("anchor.devig_methods"))),
-                    model_check(holdout, args.k), str(args.history))
+    ctx = run(args.history, cfg)
+    text = render(ctx)
     if args.out:
-        args.out.write_text(text, encoding="utf-8", newline="\n")
+        write_results(args.out, text)
         print(f"wrote {args.out}")
     else:
         print(text)
+    if args.write_dist:
+        for path in write_dist(ctx, args.write_dist):
+            print(f"wrote {path}")
+    for key, value, rule in ctx["decisions"]:
+        print(f"{key} = {value}  [{rule}]")
     return 0
 
 
