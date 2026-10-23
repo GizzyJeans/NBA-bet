@@ -239,14 +239,16 @@ def anchor(family, ref_line: float, p_ref: float, *, search: float = 15.0) -> An
 def save_families(path: Path | str, empirical: EmpiricalFamily, normal: NormalFamily, meta: dict) -> None:
     """Both families of one market as aggregate counts: per line bucket, how many
     games ended at each margin (or total). No game rows (VALIDATION.md D5)."""
-    data = {"schema": DIST_SCHEMA, "market": empirical.market, **meta,
-            "empirical": {"bucket_width": empirical.bucket_width, "bandwidth": empirical.bandwidth,
-                          "buckets": {f"{b:g}": {str(x): n for x, n in sorted(counts.items())}
-                                      for b, counts in sorted(empirical.buckets.items())}},
-            "normal": {"sigma": normal.sigma, "offset": normal.offset}}
+    head = {"schema": DIST_SCHEMA, "market": empirical.market, **meta,
+            "normal": {"sigma": normal.sigma, "offset": normal.offset},
+            "empirical": {"bucket_width": empirical.bucket_width, "bandwidth": empirical.bandwidth}}
+    buckets = ",\n".join(f'  "{b:g}": ' + json.dumps({str(x): n for x, n in sorted(counts.items())},
+                                                     separators=(",", ":"))
+                         for b, counts in sorted(empirical.buckets.items()))
+    text = json.dumps(head, indent=1)[:-1].rstrip() + ',\n "buckets": {\n' + buckets + "\n }\n}\n"
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8", newline="\n")
+    path.write_text(text, encoding="utf-8", newline="\n")
 
 
 def load_families(path: Path | str) -> tuple[EmpiricalFamily, NormalFamily, dict]:
@@ -254,19 +256,26 @@ def load_families(path: Path | str) -> tuple[EmpiricalFamily, NormalFamily, dict
     if data.get("schema") != DIST_SCHEMA:
         raise ValueError(f"{path}: not a {DIST_SCHEMA} file")
     e = data["empirical"]
-    empirical = EmpiricalFamily.from_buckets(data["market"], {float(b): c for b, c in e["buckets"].items()},
+    empirical = EmpiricalFamily.from_buckets(data["market"], {float(b): c for b, c in data["buckets"].items()},
                                              bucket_width=e["bucket_width"], bandwidth=e["bandwidth"])
     normal = NormalFamily(data["market"], data["normal"]["sigma"], data["normal"]["offset"])
     return empirical, normal, data
 
 
-def load_tier_b(directory: Path | str, markets: Iterable[str], selected: dict[str, str]) -> "TierB | None":
+def load_tier_b(directory: Path | str, markets: Iterable[str], selected: dict[str, str],
+                bandwidths: dict[str, float] | None = None) -> "TierB | None":
     """TierB for the validated markets only, from the files `validate --write-dist` wrote.
-    `selected` maps the config scale (spread / total) to the family VALIDATION.md chose."""
+    `selected` and `bandwidths` are the config's (keyed spread / total); a file that
+    disagrees with them, or was not validated, is refused rather than used."""
     primary, alternative = {}, {}
     for market in markets:
-        empirical, normal, _ = load_families(Path(directory) / f"{market}.json")
+        path = Path(directory) / f"{market}.json"
+        empirical, normal, meta = load_families(path)
         scale = "spread" if market == "spreads" else "total"
+        if not meta.get("validated") or meta.get("selected_method") != selected[scale]:
+            raise ValueError(f"{path}: not the family the config validated for {market}")
+        if bandwidths is not None and abs(empirical.bandwidth - bandwidths[scale]) > 1e-9:
+            raise ValueError(f"{path}: bandwidth {empirical.bandwidth} differs from the config's {bandwidths[scale]}")
         first, second = (empirical, normal) if selected[scale] == "empirical" else (normal, empirical)
         primary[market], alternative[market] = first, second
     return TierB(primary, alternative) if primary else None

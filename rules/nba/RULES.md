@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.3.0 · 2026-10-21 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2)**
+**Version 0.5.0 · 2026-10-23 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -126,7 +126,7 @@ Prohibited in v1:
 - **R-6.1** Teams are matched by abbreviation and Chinese name to the US feed's names. Home comes from `[主]`. A home/away mismatch with the US feed → `NB-DATA`, except at the NBA Cup final (neutral site: match by name and flag `NEUTRAL_SITE`).
 - **R-6.2** **Tier A** (model-free), half-point leg: the leg's line is quoted by at least `cfg:tiers.tier_a_min_books` US books. Its probability is that line's consensus.
 - **R-6.3** **Tier A**, integer leg at k: both neighbouring half-point lines, k − 0.5 and k + 0.5, are quoted by at least `cfg:tiers.tier_a_min_books` books. Then P(win) = P(cover at k + 0.5) and P(push) = P(cover at k − 0.5) − P(cover at k + 0.5), all from the market (the logic of MLB gate 2B). Otherwise the leg is Tier B.
-- **R-6.4** **Tier B** (translated): the leg's line is within `cfg:tiers.tier_b_max_gap` of `L_ref`. Its probabilities come from §7 anchored to the consensus at `L_ref`. Translation noise enters σ_EV (R-12.3) and confidence is at most Medium. While `cfg:distribution.status` ≠ `VALIDATED`, Tier B is disabled and such legs get `NB-TIER-C`.
+- **R-6.4** **Tier B** (translated): the leg's line is within `cfg:tiers.tier_b_max_gap` of `L_ref`. Its probabilities come from §7 anchored to the consensus at `L_ref`. Translation noise enters σ_EV (R-12.3) and confidence is at most Medium. While `cfg:distribution.status` ≠ `VALIDATED`, Tier B is disabled and such legs get `NB-TIER-C`. Even when it is `VALIDATED`, Tier B serves only the markets in `cfg:distribution.validated_markets`, from the aggregate family files in `data/dist/` that match the config's method and bandwidth. A family that cannot be anchored near `L_ref` (no history there) gives `NB-TIER-C`, and the fair line falls back to `L_ref`.
 - **R-6.5** **Tier C**: any other leg → `NB-TIER-C`. The row is still logged for the bias and lag trackers.
 - **R-6.6** **Sanity.** `|platform line − US fair line| > cfg:tiers.sanity_gap` → `NB-SANITY`, unless a timestamped, sourced explanation exists (R-9.5); with one, evaluation continues and usually stops at R-6.5. If the platform's giving team is not the US favourite and `|US fair line| ≥ cfg:tiers.direction_check_min_pts` → `NB-SANITY`. A reading is never flipped to match the market. *Why:* in MLB the screenshot row reading was wrong 6 times out of 6 (`MLB/docs/board_reading.md`); a flipped reading would bet the side nobody checked.
 - **R-6.7** The moneyline is always Tier A: same market, two-way, overtime included on both sides.
@@ -134,9 +134,9 @@ Prohibited in v1:
 ## 7. Empirical margin and total distributions
 
 - **R-7.1** Targets: P(final margin = k | closing spread bucket) and P(final total = k | closing total bucket), as integer masses, from final scores including overtime (`cfg:distribution.include_overtime`, because the platform settles with overtime). Margin = home − away (`cfg:distribution.margin_definition`).
-- **R-7.2** Data: historical US closing lines and final scores with documented provenance (source, N, seasons, retrieval date). Free sources only. Candidates and access status are in Appendix B. Gaps are reported, never filled with invented data.
+- **R-7.2** Data: historical US closing lines and final scores with documented provenance (source, N, seasons, retrieval date). Free sources only. Candidates and access status are in Appendix B. Gaps are reported, never filled with invented data. The dataset in use, its conversion rules and its caveats (no licence file; line timing not stated) are in VALIDATION.md §0.7 and R1. Game rows stay off the public repository; only aggregate counts are committed.
 - **R-7.3** The season split (`cfg:distribution.train_seasons`, `cfg:distribution.holdout_seasons`) is fixed before fitting, with the most recent complete seasons as holdout. The 2019-20 bubble games and the 2020-21 season are excluded from the primary fit (`cfg:distribution.exclude`) and appear only in a sensitivity check.
-- **R-7.4** Method: empirical masses per `cfg:distribution.bucket_width`-point bucket, kernel-smoothed across neighbouring buckets with `cfg:distribution.smoothing_bandwidth` chosen by cross-validation on the training seasons. It is compared on the holdout with a discretized normal fitted to the same data. Criterion: holdout log loss of win / push / lose at the lines the platform hangs, with N per bucket. The winner (`cfg:distribution.selected_method`) and its numbers go into `VALIDATION.md`; only then does `cfg:distribution.status` become `VALIDATED`.
+- **R-7.4** Method: empirical masses per `cfg:distribution.bucket_width`-point bucket, kernel-smoothed across neighbouring buckets with `cfg:distribution.smoothing_bandwidth` chosen by cross-validation on the training seasons. It is compared on the holdout with a discretized normal fitted to the same data. Criterion: holdout log loss of win / push / lose at the lines the platform hangs, with N per bucket. The winner (`cfg:distribution.selected_method`, per market) and its numbers go into `VALIDATION.md`. Only then does `cfg:distribution.status` become `VALIDATED`, under the criteria pre-declared in VALIDATION.md §0.3 (calibration up to the gap, residual-SD bands).
 - **R-7.5** Bug-detection bands only, never inputs: a fitted residual σ outside 10–15 points (margin) or 15–23 points (total) means investigate before use. The bands come from the brief and are unverified. `cfg:distribution.bug_bands`
 - **R-7.6** Late-season behaviour from before 2026-27 is not used to estimate any late-season effect: the 3-2-1 lottery reform (Appendix A) is a regime break.
 
@@ -144,10 +144,10 @@ Prohibited in v1:
 
 - **R-8.1** The model only vetoes or downgrades (P1).
 - **R-8.2** Components, built in Phase 2: possession-based, opponent-adjusted team ratings from official box scores; home-court, rest, travel, and altitude effects estimated from data; and an injury adjustment (player impact × projected minutes) only once an impact metric with documented source and licence exists. `cfg:model.injury_impact_metric` is `none`, so the injury adjustment is off.
-- **R-8.3** Early season: ratings shrink toward a prior (prior-season ratings regressed to the mean; market win totals only if a free source is found), with weight g / (g + k) after g games and k = `cfg:model.prior_shrinkage_k_games` chosen by backtest.
+- **R-8.3** Early season: ratings shrink toward a prior (prior-season ratings regressed to the mean; market win totals only if a free source is found), with weight g / (g + k) after g games and k = `cfg:model.prior_shrinkage_k_games` chosen by backtest. Phase 3 chose k with a zero prior (league average) within each season (VALIDATION.md M1, A6); a prior-season prior is not yet evaluated.
 - **R-8.4** For side S at platform line X, let d = model expectation − X, oriented so that d > 0 favours S. If d < −`cfg:model.model_veto_pts` → `NB-MODEL-VETO`. If −`model_veto_pts` ≤ d < −`cfg:model.model_downgrade_pts` → confidence one level lower (minimum Low). d ≥ 0 changes nothing. For the moneyline, X = 0.
 - **R-8.5** `cfg:model.status` is `OFF` until the model is built. A built but unvalidated model may veto, because that is stricter; its output is labelled `UNVALIDATED`. While `OFF`, confidence is at most Medium.
-- **R-8.6** Evaluation (Phase 3): MAE against the closing spread and total; Brier score and log loss against results; split by season phase (games 1–20, game 21 to the trade deadline, post-deadline, last 20), with N per split.
+- **R-8.6** Evaluation (Phase 3): MAE against the closing spread and total; Brier score and log loss against results; split by season phase (games 1–20, game 21 to the trade deadline, post-deadline, last 20), with N per split. The deadline split needs historical deadline dates the dataset lacks; Phase 3 reports games 1–20, middle and last 20 (VALIDATION.md M2).
 
 ## 9. Injuries and news
 
@@ -405,19 +405,20 @@ Checked on 2026-10-21 through web-search result summaries. The primary pages cou
 | Participation policy | 2023-24 version: "star" definition; at most one star out per game; stars available for national TV and the Cup | [ESPN, 2023](https://africa.espn.com/nba/story/_/id/38392750/source-nba-board-governors-approve-tougher-rest-rule) | latest found; 2026-27 changes not verified |
 | US DST | ends 2026-11-01, resumes 2027-03-14 | Python `zoneinfo` (tzdata), computed 2026-10-21 | verified |
 
-## Appendix B. Data sources and access (2026-10-21)
+## Appendix B. Data sources and access (2026-10-21, updated 2026-10-23)
 
-This cloud environment's network policy allows only `api.the-odds-api.com` among the hosts below; the others were refused by the proxy (HTTP 403 on CONNECT). Whatever is blocked must be allowed in the environment settings or fetched on Eric's Windows machine.
+On 2026-10-21 this cloud environment's network policy allowed only `api.the-odds-api.com` among the hosts below. Eric then opened more domains (2026-10-23), and the probes are recorded per row. Whatever stays blocked must be fetched on Eric's Windows machine; WAFs are never worked around.
 
 | Need | Source | Access here | Terms / notes | Use |
 |---|---|---|---|---|
-| Live US odds | The Odds API v4, `basketball_nba` | reachable; `ODDS_API_KEY` present | Free tier is described by third parties as 500 credits a month, costing markets × regions per pull; historical pulls cost ten times as much and may need a paid plan. Its terms forbid reselling or redistributing the data as dumps (raw snapshots stay out of git, R-4.7). Observed 2026-10-21 14:24 UTC (one pull, 3 credits, 416 left in October): region `us` returned 9 books for that night's 11 games, and the most-quoted line carried 3–9 books, so `consensus_min_books` = 8 is often unmet | primary (R-5.8) |
+| Live US odds | The Odds API v4, `basketball_nba` | reachable; `ODDS_API_KEY` present | Free tier is described by third parties as 500 credits a month, costing markets × regions per pull; historical pulls cost ten times as much and may need a paid plan. Its terms forbid reselling or redistributing the data as dumps (raw snapshots stay out of git, R-4.7). Observed 2026-10-21 14:24 UTC (one pull, 3 credits, 416 left in October): region `us` returned 9 books for that night's 11 games, and the most-quoted line carried 3–9 books, so `consensus_min_books` = 8 is often unmet. Since 2026-10-23 regions `us,us2` (Eric), 6 credits a pull: 14–15 books per game, the most-quoted line 4–13 books, 8 of 12 games at 8 or more (410 credits left). Historical snapshots are on paid plans only | primary (R-5.8) |
 | Team names | The Odds API `/participants` | reachable | all 30 names in `teams.py` match (checked 2026-10-21, 1 credit) | mapping |
 | Final scores for settlement | The Odds API `/scores` (last 3 days) | reachable | same | primary |
-| Injury report | official.nba.com, PDFs on ak-static.cms.nba.com | blocked | not yet checked | needed for G7 |
-| Referee assignments | official.nba.com/referee-assignments | blocked | not yet checked | needed for G7 |
-| Schedule, box scores (model, flags) | cdn.nba.com, stats.nba.com | blocked | not verified | model and flags |
-| Historical closing lines and scores (§7) | Sportsbook Reviews Online archive (www.sportsbookreviewsonline.com); a Stanford CS229 poster says it covers every NBA game since October 2007 | blocked | not verified. Provenance questions: possibly one default book rather than a consensus, and a 2009 forum post reports past lines changing | candidate |
+| Injury report | official.nba.com, PDFs on ak-static.cms.nba.com | 2026-10-23: official.nba.com answers Akamai 403 "Access Denied" to this environment; ak-static.cms.nba.com 503 at its root | terms not retrievable from here | needed for G7: Eric downloads the PDF in his browser, or transcribes it (R-9.1) |
+| Referee assignments | official.nba.com/referee-assignments | same Akamai 403 | same | needed for G7, same route |
+| Schedule, box scores (model, flags) | cdn.nba.com, stats.nba.com, www.nba.com | 2026-10-23: cdn.nba.com S3 403, stats.nba.com 301, www.nba.com refused by the proxy | not verified | model and flags; not used yet |
+| Historical closing lines and scores (§7) | Sportsbook Reviews Online archive (www.sportsbookreviewsonline.com) | 2026-10-23: reachable, but every archive path returns 404; the archive is gone | — | not available |
+| Same, in use | GitHub `kyleskom/NBA-Machine-Learning-Sports-Betting` at `8e36b0b`, `Data/OddsData.sqlite` (SHA-256 `4a803d41…`), read with git | reachable | no licence file: used on this machine only, game rows never committed; book and line timing not stated (older seasons from the SBR archive, 2022-23 on from SBR's scoreboard, default FanDuel) | §7 validation (VALIDATION.md R1) |
 | Same, alternative | Kaggle datasets derived from that archive | blocked; needs a login | licence per dataset | candidate, if Eric downloads one |
 | Same, fallback | our own close snapshots from The Odds API | reachable | — | slow: one season of history per season |
 | bet365 | — | — | no public historical archive. Operator terms commonly forbid automated access ([DraftKings clause](https://conductatlas.com/platform/draftkings/draftkings-terms-of-use/provision/CA-P-039378/automated-scraping-of-website-information-prohibited/)); bet365's own terms could not be retrieved | not used |

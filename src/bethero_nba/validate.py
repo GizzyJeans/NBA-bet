@@ -507,6 +507,13 @@ def render(ctx: dict) -> str:
                 out.append(f"| {market} | {n} | {_f(se.log_loss, 5)} | {_f(sn.log_loss, 5)} | "
                            f"{_f(max(abs(se.deviation(o)) for o in OFFSETS))} | "
                            f"{_f(max(abs(sn.deviation(o)) for o in OFFSETS))} | {_f(Z * 0.5 / math.sqrt(n))} |")
+    out += ["", "**What anchoring leaves** (added after the first run; decides nothing). Tier B pins a family to "
+            "the consensus at the reference line, which removes an error common to every offset; what is left "
+            "is the deviation at each offset minus the deviation at offset 0.", "",
+            "| market | seasons | N | family | deviation at 0 | max deviation relative to 0 |",
+            "|---|---|---|---|---|---|"]
+    out += [f"| {m} | {label} | {n} | {name} | {d0:+.4f} | {rel:.4f} |"
+            for m, label, n, name, d0, rel in ctx["anchoring"]]
     out.append("")
 
     dv_hold, dv_all, best = ctx["devig_holdout"], ctx["devig_all"], ctx["devig_best"]
@@ -584,6 +591,15 @@ def run(history_csv: Path, cfg) -> dict:
         sub = supported([r for r in later if line_of(r, res.market) is not None], train, res.market)
         emp, nor = res.families
         later_scores.append((res.market, len(sub), score(emp, sub, res.market), score(nor, sub, res.market)))
+    anchoring = []
+    for res in markets:
+        for label, data in (("holdout", holdout), (", ".join(roles_.later), later)):
+            sub = supported([r for r in data if line_of(r, res.market) is not None], train, res.market)
+            for name, family in zip(("empirical", "normal"), res.families):
+                if sub:
+                    sc = score(family, sub, res.market)
+                    anchoring.append((res.market, label, len(sub), name, sc.deviation(0.0),
+                                      max(abs(sc.deviation(o) - sc.deviation(0.0)) for o in OFFSETS)))
     methods = tuple(cfg.get("anchor.devig_methods"))
     dv_hold, dv_all = devig_scores(holdout, methods), devig_scores(rows, methods)
     best = min(dv_hold, key=lambda m: dv_hold[m]["log_loss"])
@@ -604,7 +620,7 @@ def run(history_csv: Path, cfg) -> dict:
            "excluded_bubble": sum(1 for r in everything if r.season == "2019-20" and excluded(r)),
            "excluded_2021": sum(1 for r in everything if r.season == "2020-21"),
            "n_train": len(train), "n_holdout": len(holdout), "n_sensitivity": len(sens), "n_later": len(later),
-           "markets": markets, "sensitivity": sensitivity, "later": later_scores,
+           "markets": markets, "sensitivity": sensitivity, "later": later_scores, "anchoring": anchoring,
            "devig_holdout": dv_hold, "devig_all": dv_all, "devig_best": best,
            "k_table": k_table, "k": k, "phases": model_phase_table(preds, best), "n_model": len(preds),
            "p80": p80, "p60": p60}

@@ -12,8 +12,8 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.4.0
-  updated: 2026-10-21
+  version: 0.5.0
+  updated: 2026-10-23
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
 
@@ -197,9 +197,9 @@ anchor:
     source: "MLB docs/gate_2b.md: the edge must hold under every method"
   devig_display_method:
     value: shin
-    status: UNVALIDATED
-    source: "MLB default, implemented correctly here"
-    rationale: "display only; Phase 3 picks the default by calibration on closing data"
+    status: VALIDATED
+    source: "VALIDATION.md R5 (DV1): lowest log loss of the home-win probability on 2023-24 and 2024-25 moneylines, N = 2441 (shin 0.57959, power 0.57972, multiplicative 0.57993)"
+    rationale: "display only; the three differ by less than one standard error, and over every season 2007-26 multiplicative is lowest; gating stays worst-case"
   consensus_statistic:
     value: median
     status: RULE
@@ -283,9 +283,9 @@ tiers:
     rationale: "same bar as consensus_min_books"
   tier_b_max_gap:
     value: {spread: 1.5, total: 2.0}
-    status: UNVALIDATED
-    source: "Claude 2026-10-21"
-    rationale: "one point plus half a point for integer US lines, wider for totals because their distribution is wider; Tier B stays off until the distribution is VALIDATED, and Phase 3 replaces this with the largest gap whose holdout calibration error stays within the de-vig method spread"
+    status: VALIDATED
+    source: "VALIDATION.md R3, Gap rule: V3 holds at every offset up to the Phase 1 placeholder on holdout 2023-24 and 2024-25 (spreads N = 2441, totals N = 2438), so the placeholder stays; Phase 3 never raises it"
+    rationale: "VALIDATION.md §0.3 replaced the Phase 1 plan (the de-vig method spread) with a binomial calibration test, declared before the data was loaded; for spreads V3 fails at 2.0, beyond the gap"
   sanity_gap:
     value: {spread: 3.0, total: 6.0}
     status: UNVALIDATED
@@ -304,13 +304,13 @@ tiers:
 
 distribution:
   status:
-    value: UNAVAILABLE
+    value: VALIDATED
     status: RULE
-    source: "no validated distribution yet, so Tier B is off (RULES R-6.4)"
+    source: "VALIDATION.md R3 and R7 (2026-10-23): both markets pass V3 up to their gap and V4; Tier B runs for the markets in validated_markets only (RULES R-6.4)"
   validated_markets:
-    value: []
-    status: RULE
-    source: "VALIDATION.md §0.3 Status: Tier B is used only for the markets listed here"
+    value: [spreads, totals]
+    status: VALIDATED
+    source: "VALIDATION.md R3: holdout 2023-24 and 2024-25 (spreads N = 2441, totals N = 2438), V3 at every offset up to the gap, V4 residual SD 13.55 and 17.54; lines of unstated timing (D1)"
   include_overtime:
     value: true
     status: CONFIRMED
@@ -328,25 +328,21 @@ distribution:
     status: RULE
     source: "brief 1.4; RULES R-7.3"
   train_seasons:
-    value: null
-    status: UNVALIDATED
-    source: "Claude 2026-10-21"
-    rationale: "fixed when the dataset is chosen (Phase 2), before any fitting"
+    value: [2014-15, 2015-16, 2016-17, 2017-18, 2018-19, 2019-20, 2021-22, 2022-23]
+    status: RULE
+    source: "VALIDATION.md S1 and R2: usable regular seasons from 2014-15 before the holdout, N = 9400 (2019-20 to 2020-03-08, 2020-21 excluded)"
   holdout_seasons:
-    value: null
-    status: UNVALIDATED
-    source: "Claude 2026-10-21"
-    rationale: "the most recent complete seasons in the dataset"
+    value: [2023-24, 2024-25]
+    status: RULE
+    source: "VALIDATION.md S1 and R2: the two most recent complete regular seasons in the dataset, N = 2441"
   smoothing_bandwidth:
-    value: null
-    status: UNVALIDATED
-    source: "Claude 2026-10-21"
-    rationale: "chosen by cross-validation on the training seasons"
+    value: {spread: 2.0, total: 3.0}
+    status: VALIDATED
+    source: "VALIDATION.md R3 (V1): leave-one-season-out on the training seasons, lowest mean log loss over the nine offsets (N = 9400 spreads, 9397 totals)"
   selected_method:
-    value: null
-    status: UNVALIDATED
-    source: "Claude 2026-10-21"
-    rationale: "empirical vs discretized normal, by holdout log loss (Phase 3)"
+    value: {spread: normal, total: normal}
+    status: VALIDATED
+    source: "VALIDATION.md R3 (V2): lower holdout log loss over the nine offsets, spreads 0.75262 vs 0.75512 empirical, totals 0.73466 vs 0.75169 (N = 2441, 2438)"
   bug_bands:
     value: {margin_sigma: [10, 15], total_sigma: [15, 23]}
     status: UNVALIDATED
@@ -356,23 +352,20 @@ distribution:
 model:
   status:
     value: "OFF"
-    status: RULE
-    source: "not built yet (Phase 2)"
+    status: CONFIRM
+    source: "VALIDATION.md R6 (M3): evaluated, stays OFF until Eric turns it on"
   model_veto_pts:
-    value: {spread: 3.0, total: 6.0}
-    status: UNVALIDATED
-    source: "Claude 2026-10-21"
-    rationale: "placeholder that can only block; Phase 3 sets it to the 80th percentile of |model - closing line| on holdout"
+    value: {spread: 5.4, total: 7.0}
+    status: VALIDATED
+    source: "VALIDATION.md R6 (M3): 80th percentile of |model - closing line| on holdout 2023-24 and 2024-25, N = 2371 walk-forward predictions (5.42, 7.09), rounded down to 0.1"
   model_downgrade_pts:
-    value: {spread: 1.5, total: 3.0}
-    status: UNVALIDATED
-    source: "Claude 2026-10-21"
-    rationale: "half the veto distance; affects confidence only"
+    value: {spread: 3.5, total: 4.5}
+    status: VALIDATED
+    source: "VALIDATION.md R6 (M3): 60th percentile of the same, N = 2371 (3.56, 4.54), rounded down to 0.1"
   prior_shrinkage_k_games:
-    value: null
-    status: UNVALIDATED
-    source: "Claude 2026-10-21"
-    rationale: "chosen by backtest (Phase 3)"
+    value: 5
+    status: VALIDATED
+    source: "VALIDATION.md R6 (M1): lowest walk-forward MAE against the closing spread on the training seasons over k in {5, 10, 20, 40}, N = 9125 (2.684 at k = 5); 5 is the edge of the grid"
   injury_impact_metric:
     value: none
     status: RULE

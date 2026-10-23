@@ -2,6 +2,39 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.5.0 · 2026-10-23
+
+Phase 3 validation. The criteria were committed before any data was loaded (VALIDATION.md §0, `b529ba6`), and the addendum before any statistic was computed (§0.7, `68696d8`). Every value below follows from those rules, with its evidence in VALIDATION.md. Lines come from a dataset that does not state their timing (D1).
+
+- `distribution.status` UNAVAILABLE → VALIDATED, with a new key `distribution.validated_markets` = [spreads, totals] (VALIDATED). Both markets pass V3 at every offset up to their gap and V4 (R3: holdout 2023-24 and 2024-25, N = 2,441 / 2,438; residual SD 13.55 / 17.54).
+- `distribution.train_seasons` = 2014-15 to 2022-23 without 2020-21 (N = 9,400) and `distribution.holdout_seasons` = 2023-24, 2024-25 (S1, R2). Status RULE.
+- `distribution.smoothing_bandwidth` null → spread 2.0, total 3.0 (V1, leave one season out).
+- `distribution.selected_method` null → normal for both (V2: holdout log loss 0.75262 vs 0.75512 empirical for spreads, 0.73466 vs 0.75169 for totals).
+- `tiers.tier_b_max_gap` UNVALIDATED → VALIDATED, value unchanged at spread 1.5 and total 2.0 (Gap rule). VALIDATION.md §0.3 replaced the Phase 1 plan, which was to use the de-vig method spread, with a binomial calibration test.
+- `anchor.devig_display_method` UNVALIDATED → VALIDATED, value unchanged at shin (DV1: lowest holdout log loss, N = 2,441). The three methods differ by less than one standard error; gating stays worst-case.
+- `model.prior_shrinkage_k_games` null → 5 (M1, the edge of the declared grid).
+- `model.model_veto_pts` {3.0, 6.0} → {5.4, 7.0} and `model.model_downgrade_pts` {1.5, 3.0} → {3.5, 4.5} (M3: 80th and 60th percentiles of |model − closing| on holdout, N = 2,371, rounded down). These are looser than the placeholders. `model.status` stays OFF, now `CONFIRM`: Eric decides.
+- RULES:
+  - R-6.4: Tier B only for validated markets, from matching `data/dist/` files, failing closed when a family cannot anchor.
+  - R-7.2, R-7.4: the dataset in use, and the validation criteria.
+  - R-8.3: k was chosen with a zero prior.
+  - R-8.6: the deadline split is not evaluated.
+  - Appendix B: us+us2 counts, NBA hosts behind Akamai, the SBR archive gone, the dataset in use.
+- Code:
+  - `history.py`, the source adapter, pinned by SHA-256.
+  - `validate.py`, rewritten to the criteria (ERRATA E-004).
+  - `data/dist/*.json`, aggregate family counts.
+  - `analyze`: loads Tier B and refuses family files that disagree with the config.
+  - The report lists which codes blocked the slate.
+
+## 0.4.0 · 2026-10-23
+
+- `anchor.regions` [us] → [us, us2], CONFIRMED (Eric 2026-10-23: 「確認，加開 us2」). A pull now costs 6 credits and returns 14–15 books per game.
+- `us_odds.monthly_credit_budget` 500: CONFIRM → FACT (response headers 2026-10-21: used 84 + remaining 416).
+- `us_odds.max_calls_per_day` 4 → 2 (UNVALIDATED, stricter): 2 pulls × 6 credits × 30 days = 360 of 500.
+- `anchor.consensus_min_books` stays 8 (Eric chose us2 over a lower bar); rationale updated.
+- Code: spread line keys no longer split a pick'em into `-0.0` and `0.0`.
+
 ## 0.3.0 · 2026-10-21
 
 Phase 1 approved by Eric (「確認，開始 Phase 2」). Clarifications found while implementing Phase 2; no threshold value changed.

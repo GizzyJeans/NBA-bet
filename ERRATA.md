@@ -22,3 +22,19 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
 - **Correct:** `Codex-MLB work/prospective_validation.py` also computes `probability_clv`: the closing selection probability minus the selection's market probability at prediction time.
 - **Impact:** none on the rules. It understated reusable code. The NBA CLV definitions (R-14.4, R-14.5) stand, because the brief asks for CLV along the platform's line under the US closing fair distribution, which that code does not compute.
 - **Fix:** recorded here; Phase 2 reuses that module's closing fields (RULES Appendix D).
+
+## E-004 · 2026-10-23 · Phase 2 `src/bethero_nba/validate.py` (`b81e17f`)
+
+- **Wrong:**
+  1. `model_check` carried one season's ratings into the next season's first games until its next refit (up to 49 games), and used results of games earlier on the same date.
+  2. `--out` replaced all of `VALIDATION.md`, which would have erased the pre-declared criteria.
+  3. It had offsets ±1.5 and no leave-one-season-out bandwidth search, short of what VALIDATION.md §0 declared.
+  4. Its residual "SD" was an uncentred root mean square.
+- **Impact:** none on any reported number. The harness never ran on real data before it was rewritten. Found while aligning it with §0.
+- **Fix:** rewritten in `68696d8`. Walk-forward within each season uses earlier dates only, results go below a marker, the declared offsets and V1 are in, and the SD is centred. Tests are in `tests/test_validation.py`.
+
+## E-005 · 2026-10-23 · README after the us2 change (`b529ba6`)
+
+- **Wrong:** the README still said a `--live` pull costs 3 credits and listed region `us` (about 9 books) under current limits. With regions us,us2 a pull costs 6 credits.
+- **Impact:** documentation only. The budget guard computes the cost from the config (regions × markets), so no pull was budgeted wrongly.
+- **Fix:** README updated with 0.5.0.

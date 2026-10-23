@@ -8,11 +8,12 @@ read.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from .edge import CODES, Decision
+from .edge import CODES, ORDER, Decision
 from .platform import Board, BoardGame
 
 TAIPEI = ZoneInfo("Asia/Taipei")
@@ -118,7 +119,13 @@ def render(decisions: list[Decision], meta: ReportMeta) -> str:
             worse = f"平台盤口比「{d.worst_line}」更差 → 取消；" if d.worst_line else ""
             lines.append(f"- {_game_label(d.game)}：{worse}關鍵球員狀態改變 → 重跑")
     else:
-        lines.append("- 平台截圖帶手機時間、傷病報告可取得、分布驗證完成後，才可能出現建議")
+        blocking = Counter(code for d in decisions for code in set(d.codes) if code != "NB-NOT-OFFERED")
+        if blocking:
+            lines.append("每一項都至少擋住一個市場（括號內為市場數）：")
+            lines += [f"- {code}：{CODES[code]}（{n}）"
+                      for code, n in sorted(blocking.items(), key=lambda kv: ORDER[kv[0]])]
+        else:
+            lines.append("- 平台今天沒有開出可分析的盤")
     lines += ["", "## 抄盤核對"]
     for game in board.games:
         h, t, ml = game.handicap, game.total, game.moneyline

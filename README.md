@@ -26,7 +26,7 @@ $env:ODDS_API_KEY = "<your key>"      # never committed, never printed
    ```powershell
    py -m bethero_nba.analyze --board data\boards\2026-11-02\20261103T071000+0800.json --live --injuries data\injuries\2026-11-02.json
    ```
-   `--live` pulls one US snapshot (3 credits; the budget guard refuses pulls past `us_odds.max_calls_per_day` or into the reserve). Use `--odds <stored .json.gz>` to re-run on a stored snapshot. Output: the Traditional Chinese report in `reports/<slate>/`, and one hash-chained ledger row per market side in `logs/ledger.jsonl`.
+   `--live` pulls one US snapshot (6 credits with regions `us,us2`; the budget guard refuses pulls past `us_odds.max_calls_per_day` or into the reserve). Use `--odds <stored .json.gz>` to re-run on a stored snapshot. Output: the Traditional Chinese report in `reports/<slate>/`, and one hash-chained ledger row per market side in `logs/ledger.jsonl`.
 4. **Settle** after the games, with a scores pull and, if available, a US close and Eric's last pre-tip screenshot:
    ```powershell
    py -m bethero_nba.fetch scores --live
@@ -34,9 +34,25 @@ $env:ODDS_API_KEY = "<your key>"      # never committed, never printed
    ```
    Settlement rows record the shadow P&L, `CLV_US`, `CLV_line`, and whether the board was committed before tip. The pause rule (RULES R-14.7) is re-checked on every run.
 
-Other commands: `py -m bethero_nba.fetch odds --live`, `py -m bethero_nba.fetch participants --live`, `py -m bethero_nba.fetch show <stored .json.gz>`, `py -m bethero_nba.validate --history <games.csv> --holdout 2024-25,2025-26 --out rules\nba\VALIDATION.md`.
+Other commands: `py -m bethero_nba.fetch odds --live`, `py -m bethero_nba.fetch participants --live`, `py -m bethero_nba.fetch show <stored .json.gz>`.
 
 Nothing reaches the network without `--live` (RULES R-4.7). Raw Odds API responses stay in `data/raw/` and are not committed: the API's terms forbid redistributing its data and this repository is public.
+
+## Historical data and validation
+
+Tier B (translating to lines the US market does not quote) uses the distributions validated in [`rules/nba/VALIDATION.md`](rules/nba/VALIDATION.md). They are stored as aggregate counts in `data/dist/`. To reproduce them:
+
+```powershell
+git clone --filter=blob:none --no-checkout https://github.com/kyleskom/NBA-Machine-Learning-Sports-Betting $env:TEMP\kyleskom
+git -C $env:TEMP\kyleskom checkout 8e36b0b72ecc5082aa8976dff742cdf910b3aa36 -- Data/OddsData.sqlite
+py -m bethero_nba.history --sqlite $env:TEMP\kyleskom\Data\OddsData.sqlite
+py -m bethero_nba.validate --history data\history\games.csv --out rules\nba\VALIDATION.md --write-dist data\dist
+```
+
+- The dataset has no licence file, so it and the per-game history built from it (`data/history/`, gitignored) stay on your machine.
+- `history` refuses any file whose SHA-256 differs from the one its table choices were checked on.
+- Keep the clone outside this repository and never run code from it; the adapter only reads the SQLite file, read-only.
+- `validate` rewrites only the results below the marker in `VALIDATION.md`; the pre-declared criteria above it are never touched.
 
 ## Board file
 
@@ -81,6 +97,8 @@ Nothing reaches the network without `--live` (RULES R-4.7). Raw Odds API respons
 
 ## Current limits
 
-- Tier B (lines the US market does not quote exactly) stays off until the margin and total distributions are validated on historical closing lines (`distribution.status`), and that history is not reachable yet.
-- Region `us` returns about 9 books; the most-quoted line often has fewer than `anchor.consensus_min_books` (8).
-- The veto model is built but `OFF` until Phase 3 evaluates it; possession-based ratings need box scores from nba.com.
+- **Shadow mode** until Eric's go-live message. The proposed go-live conditions are in `VALIDATION.md` §3.
+- **Tier B** is validated for spreads and totals. A line farther than `tiers.tier_b_max_gap` from the US reference line (1.5 points for spreads, 2.0 for totals) still stops at `NB-TIER-C`.
+- **Injury report.** official.nba.com answers this cloud environment with Akamai 403, so the report has to come from Eric: the PDF downloaded in his browser, or a transcription. A PDF parser will be built once a real copy can be tested (RULES R-9.1). Without the report every market stops at `NB-STATUS`.
+- **Veto model.** Evaluated in `VALIDATION.md` R6, it is a poorer forecaster than the market and stays `OFF` until Eric turns it on. Possession-based ratings need box scores from nba.com.
+- **Cannot be backtested.** There are no historical platform lines, so the platform's edge, ROI and CLV are measured only in shadow mode (`VALIDATION.md` §2).

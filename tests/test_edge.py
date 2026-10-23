@@ -104,8 +104,9 @@ def test_direction_conflict_is_sanity(cfg):
 
 
 def test_translation_needs_a_validated_distribution(cfg, validated):
-    assert run(cfg)[("handicap", "home")].primary == "NB-TIER-C"
-    assert run(cfg, tier_b=tier_b())[("handicap", "home")].primary == "NB-TIER-C"   # status not VALIDATED
+    unvalidated = with_values(cfg, **{"distribution.status": "UNAVAILABLE", "distribution.validated_markets": []})
+    assert run(unvalidated)[("handicap", "home")].primary == "NB-TIER-C"
+    assert run(unvalidated, tier_b=tier_b())[("handicap", "home")].primary == "NB-TIER-C"   # not VALIDATED
     assert run(validated, tier_b=tier_b())[("handicap", "home")].codes == []
     totals_only = with_values(validated, **{"distribution.validated_markets": ["totals"]})
     assert run(totals_only, tier_b=tier_b())[("handicap", "home")].primary == "NB-TIER-C"
@@ -161,6 +162,8 @@ def test_divergence_gate_on_unequal_prices(cfg):
 
 
 def test_model_veto_and_downgrade(validated):
+    validated = with_values(validated, **{"model.model_veto_pts": {"spread": 3.0, "total": 6.0},
+                                          "model.model_downgrade_pts": {"spread": 1.5, "total": 3.0}})
     vetoed = run(validated, tier_b=tier_b(), model=lambda g: {"home_margin": 0.5, "total": 228})
     assert vetoed[("handicap", "home")].primary == "NB-MODEL-VETO"
     downgraded = run(validated, tier_b=tier_b(), model=lambda g: {"home_margin": 2.5, "total": 228})

@@ -12,7 +12,8 @@ def test_repository_config_honours_the_contract(cfg):
 
 def test_get_reaches_inside_structured_values(cfg):
     assert cfg.get("tiers.tier_b_max_gap.spread") == 1.5
-    assert cfg.status("tiers.tier_b_max_gap.spread") == "UNVALIDATED"
+    assert cfg.status("tiers.tier_b_max_gap.spread") == "VALIDATED"
+    assert cfg.get("distribution.selected_method.total") == "normal"
     assert cfg.get("risk.bankroll") == 100000
 
 

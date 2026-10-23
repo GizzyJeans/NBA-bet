@@ -229,16 +229,20 @@ def test_families_round_trip_and_tier_b(tmp_path):
     rows = synthetic(["2024-25"], per=800)
     emp = EmpiricalFamily.fit(rows, "spreads", bucket_width=0.5, bandwidth=1.0)
     nor = NormalFamily.fit(rows, "spreads")
-    dist.save_families(tmp_path / "spreads.json", emp, nor, {"validated": True})
+    dist.save_families(tmp_path / "spreads.json", emp, nor, {"validated": True, "selected_method": "normal"})
     emp2, nor2, meta = dist.load_families(tmp_path / "spreads.json")
     assert meta["validated"] and emp2.pmf(-5.5) == pytest.approx(emp.pmf(-5.5))
     assert nor2.pmf(-5.5) == pytest.approx(nor.pmf(-5.5))
     raw = json.loads((tmp_path / "spreads.json").read_text(encoding="utf-8"))
-    assert set(raw) >= {"schema", "market", "empirical", "normal"} and "rows" not in raw
-    tb = dist.load_tier_b(tmp_path, ["spreads"], {"spread": "normal", "total": "empirical"})
+    assert set(raw) >= {"schema", "market", "empirical", "normal", "buckets"} and "rows" not in raw
+    tb = dist.load_tier_b(tmp_path, ["spreads"], {"spread": "normal", "total": "empirical"}, {"spread": 1.0})
     assert tb.primary["spreads"].__class__ is NormalFamily
     assert tb.alternative["spreads"].__class__ is EmpiricalFamily
     assert dist.load_tier_b(tmp_path, [], {"spread": "normal"}) is None
+    with pytest.raises(ValueError):                                      # config chose another family
+        dist.load_tier_b(tmp_path, ["spreads"], {"spread": "empirical"})
+    with pytest.raises(ValueError):                                      # bandwidth drifted
+        dist.load_tier_b(tmp_path, ["spreads"], {"spread": "normal"}, {"spread": 2.0})
 
 
 def test_end_to_end_run_and_render(tmp_path, cfg):
@@ -264,3 +268,16 @@ def test_end_to_end_run_and_render(tmp_path, cfg):
         assert heading in text
     paths = validate.write_dist(ctx, tmp_path / "dist")
     assert sorted(p.name for p in paths) == ["spreads.json", "totals.json"]
+
+
+def test_committed_families_match_the_config(cfg, root):
+    """The engine's Tier B must load from the repository as committed (a fresh clone)."""
+    if cfg.get("distribution.status") != "VALIDATED":
+        pytest.skip("distribution not validated")
+    markets = cfg.get("distribution.validated_markets")
+    tb = dist.load_tier_b(root / "data" / "dist", markets, cfg.get("distribution.selected_method"),
+                          cfg.get("distribution.smoothing_bandwidth"))
+    assert set(tb.primary) == set(markets)
+    anchored, alternative = tb.anchored("spreads", -5.5, 0.5)
+    assert anchored.cover(5.5) == pytest.approx(0.5, abs=1e-6)
+    assert 5.0 < anchored.fair_point() < 6.0

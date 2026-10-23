@@ -97,8 +97,12 @@ def main(argv: list[str] | None = None) -> int:
 
     tier_b = None
     if cfg.get("distribution.status") == "VALIDATED":
-        tier_b = dist.load_tier_b(root / "data" / "dist", cfg.get("distribution.validated_markets"),
-                                  cfg.get("distribution.selected_method"))
+        try:
+            tier_b = dist.load_tier_b(root / "data" / "dist", cfg.get("distribution.validated_markets"),
+                                      cfg.get("distribution.selected_method"),
+                                      cfg.get("distribution.smoothing_bandwidth"))
+        except (OSError, ValueError) as exc:          # fail closed: no Tier B, every gap is NB-TIER-C
+            print(f"Tier B off: {exc}")
     ctx = edge.PassContext(cfg=cfg, analysis_ts=now, platform_ts=board.platform_ts,
                            ts_source=board.ts_source, us_ts=us_ts, final_eligible=eligible,
                            injury_report_ts=report_ts, blocking=blocking, tier_b=tier_b, model=None)
