@@ -41,7 +41,7 @@ TEAMS: tuple[Team, ...] = (
     Team("MIA", "Miami Heat", "熱火", "America/New_York"),
     Team("MIL", "Milwaukee Bucks", "公鹿", "America/Chicago"),
     Team("MIN", "Minnesota Timberwolves", "灰狼", "America/Chicago"),
-    Team("NOP", "New Orleans Pelicans", "鵜鶘", "America/Chicago"),
+    Team("NOP", "New Orleans Pelicans", "鵜鶘", "America/Chicago", ("NO",)),      # platform code
     Team("NYK", "New York Knicks", "尼克", "America/New_York"),
     Team("OKC", "Oklahoma City Thunder", "雷霆", "America/Chicago"),
     Team("ORL", "Orlando Magic", "魔術", "America/New_York"),
@@ -49,7 +49,7 @@ TEAMS: tuple[Team, ...] = (
     Team("PHX", "Phoenix Suns", "太陽", "America/Phoenix"),
     Team("POR", "Portland Trail Blazers", "拓荒者", "America/Los_Angeles"),
     Team("SAC", "Sacramento Kings", "國王", "America/Los_Angeles"),
-    Team("SAS", "San Antonio Spurs", "馬刺", "America/Chicago"),
+    Team("SAS", "San Antonio Spurs", "馬刺", "America/Chicago", ("SAN",)),       # platform code
     Team("TOR", "Toronto Raptors", "暴龍", "America/Toronto"),
     Team("UTA", "Utah Jazz", "爵士", "America/Denver"),
     Team("WAS", "Washington Wizards", "巫師", "America/New_York"),

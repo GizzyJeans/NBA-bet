@@ -1,0 +1,20 @@
+{
+  "schema": "bethero-nba-referees/1",
+  "slate_et": "2026-10-23",
+  "seen_at": "2026-10-23T23:18:00+08:00",
+  "source": "Eric's screenshot of official.nba.com/referee-assignments, received 2026-10-23 23:18 Taipei with no phone clock visible; crews listed for all 12 games",
+  "games": [
+    "NYK@BOS",
+    "HOU@SAS",
+    "ATL@CHA",
+    "DAL@IND",
+    "MIN@ORL",
+    "TOR@WAS",
+    "DET@MIA",
+    "CHI@MIL",
+    "NOP@UTA",
+    "MEM@GSW",
+    "LAC@LAL",
+    "POR@SAC"
+  ]
+}
