@@ -171,7 +171,7 @@ def _line_key(market: str, point: float | None, side: str, home_team: str) -> fl
         return None
     if market != "spreads":
         return float(point)
-    return float(point) if side == home_team else -float(point)
+    return (float(point) if side == home_team else -float(point)) + 0.0   # no -0.0 keys
 
 
 def normalise(payload: list[dict]) -> list[Game]:

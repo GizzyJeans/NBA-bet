@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.3.0
+  version: 0.4.0
   updated: 2026-10-21
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -180,10 +180,9 @@ anchor:
     status: RULE
     source: "The Odds API sport key"
   regions:
-    value: [us]
-    status: UNVALIDATED
-    source: "Claude 2026-10-21"
-    rationale: "MLB used us,us2; one region halves the credit cost to fit the free tier (Eric: free data only). Observed 2026-10-21 (one pull): us returned 9 books, the most-quoted line 3-9 books; adding us2 doubles the cost per pull"
+    value: [us, us2]
+    status: CONFIRMED
+    source: "Eric 2026-10-23: 加開 us2 (region us alone returned 9 books on 2026-10-21; MLB also used us,us2)"
   markets:
     value: [h2h, spreads, totals]
     status: RULE
@@ -213,7 +212,7 @@ anchor:
     value: 8
     status: UNVALIDATED
     source: "MLB docs/gate_2b.md MIN_BOOKS"
-    rationale: "gate 2B precedent. Observed 2026-10-21 (one pull, 11 games): region us has 9 books and the most-quoted line carries 3-9, so 8 is often unmet; kept (stricter) until Eric chooses between adding us2 and a lower bar"
+    rationale: "gate 2B precedent (about half of MLB's ~15 books on us,us2). With region us alone (2026-10-21) the most-quoted line carried 3-9 of 9 books; Eric chose to add us2 and keep 8 (2026-10-23)"
   consensus_translate_max_gap:
     value: {spread: 1.0, total: 1.0}
     status: UNVALIDATED
@@ -238,13 +237,13 @@ anchor:
 us_odds:
   monthly_credit_budget:
     value: 500
-    status: CONFIRM
-    source: "The Odds API free tier as described by third parties (RULES Appendix B); Eric's plan not stated"
+    status: FACT
+    source: "Odds API response headers 2026-10-21: x-requests-used 84 + x-requests-remaining 416 = 500"
   max_calls_per_day:
-    value: 4
+    value: 2
     status: UNVALIDATED
-    source: "Claude 2026-10-21"
-    rationale: "about 2 analysis pulls and 2 close pulls; 4 pulls x 3 credits x 30 days = 360 of 500"
+    source: "Claude 2026-10-23"
+    rationale: "two regions cost 6 credits a pull: 2 pulls x 6 x 30 days = 360, plus score pulls, stays inside 500; one pull for Eric's screenshot, one timed as the close of the main tip window"
   min_remaining_reserve:
     value: 50
     status: UNVALIDATED
