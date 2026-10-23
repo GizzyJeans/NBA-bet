@@ -2,6 +2,8 @@
 
 Prices an Asian platform's NBA lines against the US no-vig consensus and decides, market by market, whether a bet exists. It does not try to out-predict the market. The rules are in [`rules/nba/RULES.md`](rules/nba/RULES.md) and override this code; every threshold is in [`rules/nba/config.yaml`](rules/nba/config.yaml) with its status and source. Errors in Claude's own outputs are in [`ERRATA.md`](ERRATA.md).
 
+Working with Claude Code: [`CLAUDE.md`](CLAUDE.md) holds the invariants. The project skills are `nba-daily-pass` (a slate from screenshot to settlement) and `nba-rule-change` (changing a rule, threshold or validation), in `.claude/skills/`.
+
 The default mode is **shadow**: stakes are computed and logged but are not to be placed until Eric says go live.
 
 ## Setup (Windows PowerShell)

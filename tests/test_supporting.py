@@ -52,6 +52,10 @@ def test_blocking_players_treat_unknown_minutes_as_key(cfg):
                   ROWS[3]]
     quiet = injuries.Timeline(injuries.parse_rows(quiet_rows, t))                # nobody Questionable or Doubtful
     assert injuries.blocking_players(quiet, ("NYK", "BOS"), None, cfg, t) == []
+    two_way = [ROWS[0], ["11/02/2026", "07:30 (ET)", "NYK@BOS", "New York Knicks", "Akins, Jaden", "Questionable",
+                         "G League - Two-Way"]]
+    tl2 = injuries.Timeline(injuries.parse_rows(two_way, t))
+    assert injuries.blocking_players(tl2, ("NYK", "BOS"), None, cfg, t) == []      # Eric 2026-10-23: B
 
 
 def test_final_eligible_windows():

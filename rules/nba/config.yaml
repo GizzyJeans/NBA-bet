@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.5.3
+  version: 0.5.4
   updated: 2026-10-23
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -390,6 +390,10 @@ injuries:
     value: [Questionable, Doubtful]
     status: RULE
     source: "brief 1.6"
+  nonblocking_reasons:
+    value: ["G League - Two-Way"]
+    status: CONFIRMED
+    source: "Eric 2026-10-23: 「B不擋」. Two-way players listed for a G League assignment do not block; in the 2026-10-23 07:15 AM ET report this alone blocked ATL@CHA and NYK@BOS"
 
 scenario:
   altitude_teams:

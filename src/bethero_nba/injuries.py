@@ -293,15 +293,18 @@ def blocking_players(timeline: Timeline, tricodes: tuple[str, str],
     """Players currently listed with a blocking status who are key (RULES R-9.3).
 
     A listed player whose recent minutes are not supplied counts as key: missing
-    data can only block. So minutes are needed only to clear a bench player."""
+    data can only block. So minutes are needed only to clear a bench player.
+    Reasons in injuries.nonblocking_reasons (a two-way player's G League
+    assignment, Eric 2026-10-23) never block."""
     blocking = set(cfg.get("injuries.blocking_statuses"))
+    exempt = set(cfg.get("injuries.nonblocking_reasons"))
     found = []
     for tricode in tricodes:
         known = (minutes or {}).get(tricode, {})
         keys = key_players(known, cfg)
         for player in sorted(timeline.players(tricode)):
             record = timeline.status_at(tricode, player, at)
-            if record is None or record.status not in blocking:
+            if record is None or record.status not in blocking or record.reason.strip() in exempt:
                 continue
             if player not in known or player in keys:
                 found.append(f"{player}（{record.status}）")

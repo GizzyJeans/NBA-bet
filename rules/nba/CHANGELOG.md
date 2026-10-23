@@ -2,6 +2,12 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.5.4 · 2026-10-23
+
+- New `injuries.nonblocking_reasons` = ["G League - Two-Way"], CONFIRMED (Eric 2026-10-23: 「B不擋」). A Questionable or Doubtful listing with that reason no longer blocks its game (R-9.4).
+  - In the 2026-10-23 07:15 AM ET report, this alone had blocked 2 of 12 games (ATL@CHA, NYK@BOS).
+  - The cost: a two-way player who is really in the rotation is no longer caught.
+
 ## 0.5.3 · 2026-10-23
 
 - R-9.1: the official injury report now enters as the PDF Eric saves in his browser.
