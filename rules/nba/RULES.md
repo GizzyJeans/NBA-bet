@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.5.0 · 2026-10-23 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
+**Version 0.5.1 · 2026-10-23 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -146,7 +146,7 @@ Prohibited in v1:
 - **R-8.2** Components, built in Phase 2: possession-based, opponent-adjusted team ratings from official box scores; home-court, rest, travel, and altitude effects estimated from data; and an injury adjustment (player impact × projected minutes) only once an impact metric with documented source and licence exists. `cfg:model.injury_impact_metric` is `none`, so the injury adjustment is off.
 - **R-8.3** Early season: ratings shrink toward a prior (prior-season ratings regressed to the mean; market win totals only if a free source is found), with weight g / (g + k) after g games and k = `cfg:model.prior_shrinkage_k_games` chosen by backtest. Phase 3 chose k with a zero prior (league average) within each season (VALIDATION.md M1, A6); a prior-season prior is not yet evaluated.
 - **R-8.4** For side S at platform line X, let d = model expectation − X, oriented so that d > 0 favours S. If d < −`cfg:model.model_veto_pts` → `NB-MODEL-VETO`. If −`model_veto_pts` ≤ d < −`cfg:model.model_downgrade_pts` → confidence one level lower (minimum Low). d ≥ 0 changes nothing. For the moneyline, X = 0.
-- **R-8.5** `cfg:model.status` is `OFF` until the model is built. A built but unvalidated model may veto, because that is stricter; its output is labelled `UNVALIDATED`. While `OFF`, confidence is at most Medium.
+- **R-8.5** `cfg:model.status` is `OFF` until the model is built. A built but unvalidated model may veto, because that is stricter; its output is labelled `UNVALIDATED`. While `OFF`, confidence is at most Medium. "Built" means fitted at run time inside `analyze` from the current season's results (collected by the scores pulls, at least 30 games). The Phase 3 model is built and evaluated offline only (VALIDATION.md R6), so turning it on needs that wiring first.
 - **R-8.6** Evaluation (Phase 3): MAE against the closing spread and total; Brier score and log loss against results; split by season phase (games 1–20, game 21 to the trade deadline, post-deadline, last 20), with N per split. The deadline split needs historical deadline dates the dataset lacks; Phase 3 reports games 1–20, middle and last 20 (VALIDATION.md M2).
 
 ## 9. Injuries and news

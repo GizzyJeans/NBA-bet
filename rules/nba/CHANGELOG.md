@@ -2,6 +2,11 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.5.1 · 2026-10-23
+
+- `model.status` stays `"OFF"`; its label changes from `CONFIRM` to `RULE`. `CONFIRM` means "the value shown is the stricter default", and OFF is not the stricter value: a model that is on can only block more bets. The source now says that turning it on needs in-season results and a run-time fit in `analyze` first (ERRATA E-006).
+- R-8.5 defines "built" as that run-time fit. README and VALIDATION.md §1 say the same.
+
 ## 0.5.0 · 2026-10-23
 
 Phase 3 validation. The criteria were committed before any data was loaded (VALIDATION.md §0, `b529ba6`), and the addendum before any statistic was computed (§0.7, `68696d8`). Every value below follows from those rules, with its evidence in VALIDATION.md. Lines come from a dataset that does not state their timing (D1).

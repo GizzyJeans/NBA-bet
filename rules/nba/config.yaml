@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.5.0
+  version: 0.5.1
   updated: 2026-10-23
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -352,8 +352,8 @@ distribution:
 model:
   status:
     value: "OFF"
-    status: CONFIRM
-    source: "VALIDATION.md R6 (M3): evaluated, stays OFF until Eric turns it on"
+    status: RULE
+    source: "VALIDATION.md M3 and R6: evaluated offline; stays OFF until Eric decides. The engine runs without a model until this season's results are collected and the fit is wired into analyze (RULES R-8.5, ERRATA E-006)"
   model_veto_pts:
     value: {spread: 5.4, total: 7.0}
     status: VALIDATED

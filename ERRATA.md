@@ -38,3 +38,11 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
 - **Wrong:** the README still said a `--live` pull costs 3 credits and listed region `us` (about 9 books) under current limits. With regions us,us2 a pull costs 6 credits.
 - **Impact:** documentation only. The budget guard computes the cost from the config (regions × markets), so no pull was budgeted wrongly.
 - **Fix:** README updated with 0.5.0.
+
+## E-006 · 2026-10-23 · Phase 3 reply and config 0.5.0, `model.status`
+
+- **Wrong:** the Phase 3 reply offered the veto model as a plain choice between OFF and ON, and config 0.5.0 labelled `model.status` `CONFIRM`, whose definition is "the value shown is the stricter default".
+  1. ON is not a switch yet: `analyze` passes no model to the engine, so setting ON would change nothing until this season's results are collected and the fit is wired in.
+  2. OFF is not the stricter value: a model that is on can only block or downgrade, never add.
+- **Impact:** none on any number, gate or stake. The model has never run in a pass. It could have led Eric to choose ON expecting an immediate effect.
+- **Fix:** config 0.5.1 labels it `RULE` with an accurate source; RULES R-8.5, README and VALIDATION.md §1 state what turning it on needs; the follow-up reply explains both points.

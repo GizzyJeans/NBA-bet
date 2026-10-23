@@ -85,7 +85,7 @@ Written after the results below; it restates them and changes no criterion. R-nu
   - On holdout the model is 3.43 points from the closing spread and 4.50 from the closing total on average.
   - Its home-win Brier score is 0.2151, against the market's 0.1985.
   - It is a poorer forecaster than the market, as expected, which is why it may only veto.
-  - Veto at 5.4 (spread) and 7.0 (total) points of disagreement; downgrade at 3.5 and 4.5. `model.status` stays OFF until Eric decides.
+  - Veto at 5.4 (spread) and 7.0 (total) points of disagreement; downgrade at 3.5 and 4.5. `model.status` stays OFF until Eric decides. Turning it on first needs this season's results and a run-time fit in `analyze` (RULES R-8.5).
 
 ## 2. What cannot be backtested
 
