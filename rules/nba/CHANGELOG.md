@@ -2,6 +2,13 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.5.5 · 2026-10-23
+
+- `snapshots.require_referee_assignments` stays true; its label changes from RULE to CONFIRMED.
+  - Eric 2026-10-23 chose 「A 每天傳截圖」: he sends a screenshot of the referee-assignments page every day.
+  - The other option, assuming assignments are posted after 10 a.m. ET, was declined.
+  - official.nba.com refuses this environment, so the screenshot is the only evidence.
+
 ## 0.5.4 · 2026-10-23
 
 - New `injuries.nonblocking_reasons` = ["G League - Two-Way"], CONFIRMED (Eric 2026-10-23: 「B不擋」). A Questionable or Doubtful listing with that reason no longer blocks its game (R-9.4).

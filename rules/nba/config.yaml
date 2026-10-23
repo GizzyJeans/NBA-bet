@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.5.4
+  version: 0.5.5
   updated: 2026-10-23
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -272,8 +272,8 @@ snapshots:
     source: "brief 1.6; RULES R-4.5"
   require_referee_assignments:
     value: true
-    status: RULE
-    source: "brief 1.6; RULES R-4.5"
+    status: CONFIRMED
+    source: "brief 1.6; RULES R-4.5. Eric 2026-10-23 chose 「A 每天傳截圖」 over assuming assignments are posted after 10 a.m. ET: the evidence is his daily screenshot of official.nba.com/referee-assignments, whose clock becomes --referees-posted-at"
 
 tiers:
   tier_a_min_books:
