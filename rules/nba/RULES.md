@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.5.2 · 2026-10-23 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
+**Version 0.5.3 · 2026-10-23 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -103,7 +103,12 @@ Prohibited in v1:
 - **R-4.2** A platform snapshot is one screenshot from Eric. `platform_ts` is the phone clock visible in the screenshot (`ts_source = screenshot_clock`). Without a visible clock it is the time the screenshot reached the session (`ts_source = received`, an upper bound). Each screenshot is transcribed to `data/boards/<slate>/<platform_ts>.json`; fields that cannot be read with certainty are listed under `unresolved`, and a market with an unresolved field gets `NB-FORMAT`. Screenshots themselves are not committed, because the repository is public.
 - **R-4.3** A US snapshot is one Odds API pull, taken when a screenshot arrives, plus the close pulls of R-14.3. Per-book `last_update` is kept. A quote older than `cfg:anchor.us_quote_max_age_min` at pull time is dropped.
 - **R-4.4** `|platform_ts − us_ts| ≤ cfg:snapshots.snapshot_max_skew_min`, and both before tip; otherwise `NB-STALE`.
-- **R-4.5** Passes are keyed to events, not clock times. A pass is FINAL-eligible for a game when (a) the official game-day injury report covering both teams has been published (for the second game of a back-to-back: the 1 p.m. local game-day status) and (b) that day's referee assignments are posted. `cfg:snapshots.require_gameday_report`, `cfg:snapshots.require_referee_assignments`. Before that, the pass is PRELIMINARY: everything is logged and no stake is output (`NB-STATUS`). The final pass for CLV is the last one within `cfg:snapshots.close_snapshot_window_min` of tip (R-14.3).
+- **R-4.5** Passes are keyed to events, not clock times. A pass is FINAL-eligible for a game when (a) the official game-day injury report covering both teams has been published (for the second game of a back-to-back: the 1 p.m. local game-day status) and (b) that day's referee assignments are posted. `cfg:snapshots.require_gameday_report`, `cfg:snapshots.require_referee_assignments`. From one official report, a team's game-day status counts as published when all three hold:
+  - the report covers the team's game and does not mark the team NOT YET SUBMITTED;
+  - it came out at or after 1 p.m. on the game date, both where the game is played and in the team's own city;
+  - a team absent from its game's block counts as filed with nothing to report.
+
+  Before that, the pass is PRELIMINARY: everything is logged and no stake is output (`NB-STATUS`). The final pass for CLV is the last one within `cfg:snapshots.close_snapshot_window_min` of tip (R-14.3).
 
   *Why, in Taipei time from 2026-11-01 (US standard time):* referee assignments are posted around 22:00 the evening before; game-day reports arrive 00:00–05:00 (Eastern teams first, Pacific teams last); evening tips are 08:00–11:30. Subtract one hour before 11-01 and from 03-14. For tips at 5 p.m. local or earlier, game-day reports come 8–10 a.m. local, which is 21:00–23:00 Taipei the evening before for Eastern teams.
 
@@ -151,7 +156,11 @@ Prohibited in v1:
 
 ## 9. Injuries and news
 
-- **R-9.1** Source of truth: the official NBA injury report (`cfg:injuries.source`), parsed into a per-player status timeline (report time, status, reason). Until the report can be fetched and its PDF layout has been tested on a real copy, it enters as a JSON transcription of the official report (format in README), with the report time as its provenance.
+- **R-9.1** Source of truth: the official NBA injury report (`cfg:injuries.source`), parsed into a per-player status timeline (report time, status, reason).
+  - It enters as the PDF Eric saves from official.nba.com in his browser; nothing fetches from NBA hosts automatically.
+  - `injuries.read_pdf` was built and checked on a real copy, the 2026-10-23 07:15 AM ET report: 85 player rows and 16 not-submitted rows, all as printed. It refuses any layout it has not seen.
+  - The pass records the PDF's SHA-256. The PDF itself stays out of git.
+  - A JSON transcription (format in README) is the fallback, with the report time as its provenance.
 - **R-9.2** At analysis time the newest stored injury report must be at most `cfg:snapshots.injury_report_max_age_min` old; otherwise `NB-STALE`. If the report cannot be fetched → `NB-STATUS`: missing data is not "no injuries".
 - **R-9.3** A key player averaged at least `cfg:injuries.key_player_min_minutes` minutes over his last `cfg:injuries.key_player_window_games` games played. *Why minutes:* no licensed impact metric exists yet, and this proxy can only block. A player listed in a blocking status whose recent minutes are not supplied counts as key: missing data can only block. So minutes are needed only to clear a bench player.
 - **R-9.4** A key player listed in `cfg:injuries.blocking_statuses` → `NB-STATUS` for that game, unless both EV ≥ 0 under the adverse resolution and EV ≥ `cfg:gates.min_ev` in expectation can be computed. That needs a validated impact metric, which v1 does not have, so in v1 it always blocks.
@@ -414,7 +423,7 @@ On 2026-10-21 this cloud environment's network policy allowed only `api.the-odds
 | Live US odds | The Odds API v4, `basketball_nba` | reachable; `ODDS_API_KEY` present | Free tier is described by third parties as 500 credits a month, costing markets × regions per pull; historical pulls cost ten times as much and may need a paid plan. Its terms forbid reselling or redistributing the data as dumps (raw snapshots stay out of git, R-4.7). Observed 2026-10-21 14:24 UTC (one pull, 3 credits, 416 left in October): region `us` returned 9 books for that night's 11 games, and the most-quoted line carried 3–9 books, so `consensus_min_books` = 8 is often unmet. Since 2026-10-23 regions `us,us2` (Eric), 6 credits a pull: 14–15 books per game, the most-quoted line 4–13 books, 8 of 12 games at 8 or more (410 credits left). Historical snapshots are on paid plans only | primary (R-5.8) |
 | Team names | The Odds API `/participants` | reachable | all 30 names in `teams.py` match (checked 2026-10-21, 1 credit) | mapping |
 | Final scores for settlement | The Odds API `/scores` (last 3 days) | reachable | same | primary |
-| Injury report | official.nba.com, PDFs on ak-static.cms.nba.com | 2026-10-23: official.nba.com answers Akamai 403 "Access Denied" to this environment; ak-static.cms.nba.com 503 at its root | terms not retrievable from here | needed for G7: Eric downloads the PDF in his browser, or transcribes it (R-9.1) |
+| Injury report | official.nba.com, PDFs on ak-static.cms.nba.com | 2026-10-23: official.nba.com answers Akamai 403 "Access Denied" to this environment; ak-static.cms.nba.com 503 at its root | terms not retrievable from here | needed for G7: Eric downloads the PDF in his browser and `analyze --injury-pdf` reads it (layout checked on the 2026-10-23 07:15 AM ET report); a JSON transcription is the fallback (R-9.1) |
 | Referee assignments | official.nba.com/referee-assignments | same Akamai 403 | same | needed for G7, same route |
 | Schedule, box scores (model, flags) | cdn.nba.com, stats.nba.com, www.nba.com | 2026-10-23: cdn.nba.com S3 403, stats.nba.com 301, www.nba.com refused by the proxy | not verified | model and flags; not used yet |
 | Historical closing lines and scores (§7) | Sportsbook Reviews Online archive (www.sportsbookreviewsonline.com) | 2026-10-23: reachable, but every archive path returns 404; the archive is gone | — | not available |

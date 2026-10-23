@@ -2,11 +2,12 @@
 
 import json
 import shutil
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 
 from bethero_nba import analyze, ledger, net, settle
+from bethero_nba import injuries as injury_report
 from tests.helpers import ANALYSIS_TS, HOME, AWAY, TIP, US_TS, us_game
 
 
@@ -105,3 +106,24 @@ def test_realised_return_on_a_tail_line():
     assert settle.realised(record, 105, 100) == pytest.approx(0.475)       # Eric's confirmed case
     assert settle.realised({**record, "side": "away", "laying": False}, 105, 100) == pytest.approx(-0.5)
     assert settle.realised(record, 110, 100) == pytest.approx(0.95)
+
+
+def test_analyze_reads_the_official_report_pdf(repo, monkeypatch):
+    tmp, board_path, snapshot = repo
+    eastern = injury_report.EASTERN
+    official = injury_report.Report(datetime(2026, 11, 2, 18, 0, tzinfo=eastern), (
+        injury_report.ReportEntry(date(2026, 11, 2), "NYK", "BOS", "NYK", "Hart, Josh", "Out", "Knee"),),
+        sha256="ab" * 32)
+    seen = []
+    monkeypatch.setattr(injury_report, "read_pdf", lambda path: seen.append(path) or official)
+    pdf = tmp / "Injury-Report_2026-11-02_06_00PM.pdf"
+    pdf.write_bytes(b"%PDF-1.4 test")
+    code = analyze.main(["--root", str(tmp), "--board", str(board_path), "--odds", str(snapshot),
+                         "--injury-pdf", str(pdf), "--referees-posted-at", "2026-11-02T09:05:00-05:00",
+                         "--now", ANALYSIS_TS.isoformat()])
+    assert code == 0 and seen == [pdf]
+    records = ledger.verify(tmp / "logs" / "ledger.jsonl")
+    assert records[0]["injury_source"] == {"kind": "official_pdf", "file": pdf.name, "sha256": "ab" * 32,
+                                           "referees_posted_at": "2026-11-02T09:05:00-05:00"}
+    bets = [r for r in records if r.get("record_type") == "decision" and not r["codes"] and r["stake"]]
+    assert len(bets) == 1 and bets[0]["market"] == "moneyline"     # an Out player blocks nothing

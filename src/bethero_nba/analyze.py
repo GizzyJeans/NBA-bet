@@ -4,10 +4,12 @@
     python -m bethero_nba.analyze --board <board.json> --odds data/raw/api.the-odds-api.com/<file>.json.gz
 
 `--live` pulls a fresh US snapshot (RULES R-4.7, budget R-5.8); `--odds` re-uses
-a stored one. `--injuries` takes a JSON transcription of the official injury
-report (format in README); without it every game stops at NB-STATUS, which is
-the rule (R-9.2), not a bug. Every evaluated market goes to logs/ledger.jsonl
-and the Traditional Chinese report to reports/<slate>/.
+a stored one. `--injury-pdf` takes the official injury report as Eric saved it,
+with `--referees-posted-at` from his referee-assignments screenshot;
+`--injuries` takes a JSON transcription instead (format in README). Without
+either, every game stops at NB-STATUS, which is the rule (R-9.2), not a bug.
+Every evaluated market goes to logs/ledger.jsonl and the Traditional Chinese
+report to reports/<slate>/.
 """
 
 from __future__ import annotations
@@ -51,6 +53,21 @@ def load_injuries(path: Path, board, cfg, at: datetime) -> tuple[dict, dict, dat
     return eligible, blocking, report_time
 
 
+def injury_gates(report_: injuries.Report, referees_posted_at: datetime | None, board, cfg,
+                 at: datetime) -> tuple[dict, dict]:
+    """(final_eligible by game, blocking players by game) from the official report."""
+    games = {game.label: (injuries.report_date_et(game.tip), game.away.tricode, game.home.tricode)
+             for game in board.games}
+    submissions = injuries.gameday_submissions(report_, list(games.values()))
+    timeline = injuries.Timeline(report_.records({day for day, _, _ in games.values()}))
+    eligible, blocking = {}, {}
+    for game in board.games:
+        teams = (game.home.tricode, game.away.tricode)
+        eligible[game.label] = injuries.final_eligible(game.tip, teams, submissions, referees_posted_at, at)
+        blocking[game.label] = injuries.blocking_players(timeline, teams, None, cfg, at)
+    return eligible, blocking
+
+
 def main(argv: list[str] | None = None) -> int:
     cli.setup_output()
     parser = argparse.ArgumentParser(prog="python -m bethero_nba.analyze", description=__doc__,
@@ -60,7 +77,11 @@ def main(argv: list[str] | None = None) -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--odds", type=Path, help="stored US snapshot (.json.gz)")
     source.add_argument("--live", action="store_true", help="pull a fresh US snapshot")
-    parser.add_argument("--injuries", type=Path, help="injury-report transcription (JSON)")
+    injury = parser.add_mutually_exclusive_group()
+    injury.add_argument("--injury-pdf", type=Path, help="official injury report PDF, as saved from official.nba.com")
+    injury.add_argument("--injuries", type=Path, help="injury-report transcription (JSON)")
+    parser.add_argument("--referees-posted-at",
+                        help="when the day's referee assignments were seen posted (ISO-8601), with --injury-pdf")
     parser.add_argument("--exposure-used", type=float, default=0.0,
                         help="stakes already placed on this slate")
     parser.add_argument("--now", help="analysis time (ISO-8601), for re-running a past pass")
@@ -88,9 +109,18 @@ def main(argv: list[str] | None = None) -> int:
     us_ts = fetched.retrieved_at
     us_games = oddsapi.normalise(fetched.json())
 
-    eligible = blocking = report_ts = None
+    eligible = blocking = report_ts = injury_source = None
     if args.injuries:
         eligible, blocking, report_ts = load_injuries(args.injuries, board, cfg, now)
+        injury_source = {"kind": "transcription", "file": args.injuries.as_posix(),
+                         "sha256": hashlib.sha256(args.injuries.read_bytes()).hexdigest()}
+    elif args.injury_pdf:
+        official = injuries.read_pdf(args.injury_pdf)
+        refs = datetime.fromisoformat(args.referees_posted_at) if args.referees_posted_at else None
+        eligible, blocking = injury_gates(official, refs, board, cfg, now)
+        report_ts = official.report_time
+        injury_source = {"kind": "official_pdf", "file": args.injury_pdf.name, "sha256": official.sha256,
+                         "referees_posted_at": refs.isoformat() if refs else None}
 
     tier_b = None
     if cfg.get("distribution.status") == "VALIDATED":
@@ -126,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
                       board.platform_ts.isoformat() if board.platform_ts else None, "ts_source": board.ts_source},
             "us_snapshot": {"url": fetched.url, "retrieved_at": us_ts.isoformat(), "sha256": fetched.sha256},
             "injury_report_ts": report_ts.isoformat() if report_ts else None,
+            "injury_source": injury_source,
             "decisions": len(decisions), "bets": sum(d.is_bet for d in decisions),
         }
         ledger.append(root / "logs" / "ledger.jsonl", [pass_record] + [d.to_record(ctx) for d in decisions])

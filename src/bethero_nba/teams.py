@@ -35,7 +35,7 @@ TEAMS: tuple[Team, ...] = (
     Team("GSW", "Golden State Warriors", "勇士", "America/Los_Angeles"),
     Team("HOU", "Houston Rockets", "火箭", "America/Chicago"),
     Team("IND", "Indiana Pacers", "溜馬", "America/Indiana/Indianapolis"),
-    Team("LAC", "Los Angeles Clippers", "快艇", "America/Los_Angeles"),
+    Team("LAC", "Los Angeles Clippers", "快艇", "America/Los_Angeles", ("LA Clippers",)),   # NBA's own spelling
     Team("LAL", "Los Angeles Lakers", "湖人", "America/Los_Angeles"),
     Team("MEM", "Memphis Grizzlies", "灰熊", "America/Chicago"),
     Team("MIA", "Miami Heat", "熱火", "America/New_York"),

@@ -2,6 +2,19 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.5.3 · 2026-10-23
+
+- R-9.1: the official injury report now enters as the PDF Eric saves in his browser.
+  - `injuries.read_pdf` cuts rows at the table's rules, carries game and team down, and joins wrapped and page-split reasons. It reads NOT YET SUBMITTED rows and refuses any layout it has not seen.
+  - Built and checked on the real 2026-10-23 07:15 AM ET report: 85 player rows and 16 not-submitted rows, all as printed.
+  - `analyze --injury-pdf --referees-posted-at` uses it, and the pass records the PDF's SHA-256. `python -m bethero_nba.injuries <pdf>` prints what the gates see.
+- R-4.5: how one report shows a team's game-day status (all three conditions must hold):
+  - it is published at or after 1 p.m. on the game date, both in the game city and in the team's own city;
+  - the team is not marked NOT YET SUBMITTED;
+  - a team absent from its game's block filed with nothing to report.
+- `teams.py`: "LA Clippers", the NBA's own spelling, is an alias of LAC.
+- Dependency: `pdfplumber` (MIT).
+
 ## 0.5.2 · 2026-10-23
 
 - Eric 2026-10-23: 「1.嚴格版 2.模型先關」.

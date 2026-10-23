@@ -25,10 +25,12 @@ $env:ODDS_API_KEY = "<your key>"      # never committed, never printed
    - the newest official injury report PDF. It is linked from official.nba.com's "NBA Injury Report" page; last season the page was `/nba-injury-report-2025-26/`. The files are named `https://ak-static.cms.nba.com/referee/injury/Injury-Report_YYYY-MM-DD_hh_mmAM.pdf` (or `PM`), in US Eastern time. In 2025-26 the file names ran in 15-minute steps.
    - a screenshot of official.nba.com/referee-assignments/ showing the day's referees, which are posted about 9 a.m. ET.
 
-   Claude transcribes both to `data/injuries/<slate>.json` (format below) and commits it with the board. The report may be at most `snapshots.injury_report_max_age_min` (30) minutes old at analysis time. Without it every game stops at `NB-STATUS`. The PDFs stay out of git: they are the NBA's documents and the repository is public.
+   `analyze --injury-pdf` reads the PDF directly, and the referee screenshot's clock goes into `--referees-posted-at`. A JSON transcription (format below) is the fallback. The report may be at most `snapshots.injury_report_max_age_min` (30) minutes old at analysis time. Without a report every game stops at `NB-STATUS`.
+
+   The PDFs stay out of git: they are the NBA's documents and the repository is public. The ledger records each one's SHA-256. To check what a PDF says before a pass, run `py -m bethero_nba.injuries <pdf>`.
 3. **Analyze.**
    ```powershell
-   py -m bethero_nba.analyze --board data\boards\2026-11-02\20261103T071000+0800.json --live --injuries data\injuries\2026-11-02.json
+   py -m bethero_nba.analyze --board data\boards\2026-11-02\20261103T071000+0800.json --live --injury-pdf $env:USERPROFILE\Downloads\Injury-Report_2026-11-02_06_30PM.pdf --referees-posted-at 2026-11-03T06:50:00+08:00
    ```
    `--live` pulls one US snapshot (6 credits with regions `us,us2`; the budget guard refuses pulls past `us_odds.max_calls_per_day` or into the reserve). Use `--odds <stored .json.gz>` to re-run on a stored snapshot. Output: the Traditional Chinese report in `reports/<slate>/`, and one hash-chained ledger row per market side in `logs/ledger.jsonl`.
 4. **Settle** after the games, with a scores pull and, if available, a US close and Eric's last pre-tip screenshot:
@@ -84,7 +86,7 @@ py -m bethero_nba.validate --history data\history\games.csv --out rules\nba\VALI
 - Prices are Hong Kong odds; `"-"` means not offered.
 - `unresolved`: any field not read with certainty, e.g. `"total.text"`; that market is not priced.
 
-## Injury transcription
+## Injury transcription (fallback)
 
 ```json
 {
