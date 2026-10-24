@@ -95,6 +95,11 @@ def render(decisions: list[Decision], meta: ReportMeta) -> str:
          f"報告 {_hm(meta.analysis_ts)}（台北）"),
         (f"本金 {meta.bankroll:,.0f}｜今日已用 {meta.exposure_used + sum(d.stake for d in bets):,.0f}"
          f" / {meta.daily_cap:,.0f}"),
+    ]
+    waived = [d for d in decisions if d.waivers]
+    if waived:
+        lines.append(f"⚠ 傷病關卡依 Eric 指示放行（{len(waived)} 個選項）；這些影子注不計入上線條件")
+    lines += [
         "",
         "## 建議",
     ]

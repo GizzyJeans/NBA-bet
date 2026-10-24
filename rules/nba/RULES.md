@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.5.5 · 2026-10-23 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
+**Version 0.6.0 · 2026-10-25 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -163,7 +163,7 @@ Prohibited in v1:
   - A JSON transcription (format in README) is the fallback, with the report time as its provenance.
 - **R-9.2** At analysis time the newest stored injury report must be at most `cfg:snapshots.injury_report_max_age_min` old; otherwise `NB-STALE`. If the report cannot be fetched → `NB-STATUS`: missing data is not "no injuries".
 - **R-9.3** A key player averaged at least `cfg:injuries.key_player_min_minutes` minutes over his last `cfg:injuries.key_player_window_games` games played. *Why minutes:* no licensed impact metric exists yet, and this proxy can only block. A player listed in a blocking status whose recent minutes are not supplied counts as key: missing data can only block. So minutes are needed only to clear a bench player.
-- **R-9.4** A key player listed in `cfg:injuries.blocking_statuses` → `NB-STATUS` for that game, unless both EV ≥ 0 under the adverse resolution and EV ≥ `cfg:gates.min_ev` in expectation can be computed. That needs a validated impact metric, which v1 does not have, so in v1 it always blocks. Exception (Eric 2026-10-23): a listing whose reason is in `cfg:injuries.nonblocking_reasons` (a two-way player's "G League - Two-Way" assignment) never blocks.
+- **R-9.4** A key player listed in `cfg:injuries.blocking_statuses` → `NB-STATUS` for that game, unless both EV ≥ 0 under the adverse resolution and EV ≥ `cfg:gates.min_ev` in expectation can be computed. That needs a validated impact metric, which v1 does not have, so in v1 it always blocks. Exception (Eric 2026-10-23): a listing whose reason is in `cfg:injuries.nonblocking_reasons` (a two-way player's "G League - Two-Way" assignment) never blocks. Slate waiver: for a US Eastern slate in `cfg:injuries.waived_slates` (set only by Eric's message), the injury blocks of R-9.2 and R-9.4 are logged and do not block. Such decisions carry `waivers: [injury]`, and their shadow bets do not count toward `cfg:golive`.
 - **R-9.5** A news-lag edge requires all of: a sourced trigger with timestamp T; the US consensus moved after T; a platform screenshot taken after T that still shows the pre-move line; and synchronized snapshots (R-4.4). It is labelled `LAG`, and Eric weighs account-limitation risk separately.
 
 ## 10. Scenario flags

@@ -152,7 +152,8 @@ def main(argv: list[str] | None = None) -> int:
                      "prospective": committed is not None and committed < tip,
                      "home_score": score.home_score, "away_score": score.away_score,
                      "return_per_unit": ret, "stake": bet["stake"], "mode": bet["mode"],
-                     "pnl": ret * bet["stake"], "clv_us": clv_us, "clv_line": clv_line})
+                     "pnl": ret * bet["stake"], "clv_us": clv_us, "clv_line": clv_line,
+                     "waivers": bet.get("waivers", [])})
         if clv_us is not None:
             clv_values.append((args.slate, clv_us))
         print(f"{away}@{home} {bet['market']} {bet['side']}: return {ret:+.3f}/unit, "
@@ -165,7 +166,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"settled {len(rows)} bet(s); CLV_US sample {check.n}; pause: {'YES' if check.paused else 'no'}")
     counted = [(date.fromisoformat(r["slate_et"]), r["clv_us"]) for r in records + rows
                if r.get("record_type") == "settlement" and r.get("clv_us") is not None
-               and r.get("mode") == "shadow" and (r.get("prospective") or not cfg.get("golive.require_prospective"))]
+               and r.get("mode") == "shadow" and not r.get("waivers")
+               and (r.get("prospective") or not cfg.get("golive.require_prospective"))]
     ready = clv.golive_check(counted, cfg)
     interval = (f"mean {ready.mean:+.4f}, CI [{ready.low:+.4f}, {ready.high:+.4f}]" if ready.mean is not None
                 else f"needs {cfg.get('golive.min_bets')} bets over {cfg.get('golive.min_slate_days')} slate days")

@@ -19,6 +19,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from . import context
 from .consensus import GameConsensus
@@ -103,6 +104,8 @@ class Decision:
     model_d: float | None = None
     downgrade: bool = False
     worst_line: str | None = None
+    waivers: list[str] = field(default_factory=list)     # gates Eric waived for this slate
+    waived: list[str] = field(default_factory=list)      # what each waiver let through
 
     def fail(self, code: str, note: str | None = None) -> None:
         if code not in self.codes:
@@ -177,7 +180,8 @@ class Decision:
             "agreement": self.agreement, "kelly": self.kelly, "stake": self.stake,
             "codes": self.codes, "primary": self.primary, "notes": self.notes,
             "flags": self.flags, "confidence": self.confidence, "edge_label": self.edge_label,
-            "model_d": self.model_d, "worst_line": self.worst_line,
+            "model_d": self.model_d, "worst_line": self.worst_line, "waivers": self.waivers,
+            "waived": self.waived,
         }
 
 
@@ -283,9 +287,13 @@ def _evaluate(game: BoardGame, market: Market, side: str, laying: bool, gc: Game
         d.fail("NB-STALE", f"平台截圖與美盤快照相差 {minutes:.0f} 分鐘")
     if any(ts is not None and ts >= game.tip for ts in (ctx.platform_ts, ctx.us_ts, ctx.analysis_ts)):
         d.fail("NB-STALE", "已開賽或快照晚於開賽")
+    waived = _injury_waived(ctx, game)
     report_age = timedelta(minutes=cfg.get("snapshots.injury_report_max_age_min"))
     if ctx.injury_report_ts is not None and ctx.analysis_ts - ctx.injury_report_ts > report_age:
-        d.fail("NB-STALE", "傷病報告過舊")
+        if waived:
+            _waive(d, "傷病報告過舊")
+        else:
+            d.fail("NB-STALE", "傷病報告過舊")
 
     # G4
     us_market, giver = US_MARKET[market.kind], _giver(market)
@@ -327,16 +335,35 @@ def _evaluate(game: BoardGame, market: Market, side: str, laying: bool, gc: Game
     eligible = ctx.final_eligible.get(game.label) if ctx.final_eligible is not None else None
     if not eligible:
         d.fail("NB-STATUS", "當日傷病報告或裁判名單未確認")
+    blocked = None
     if ctx.blocking is None:
-        d.fail("NB-STATUS", "拿不到傷病報告")
+        blocked = "拿不到傷病報告"
     elif ctx.blocking.get(game.label):
-        d.fail("NB-STATUS", "關鍵球員出賽未定：" + "、".join(ctx.blocking[game.label]))
+        blocked = "關鍵球員出賽未定：" + "、".join(ctx.blocking[game.label])
+    if blocked and waived:
+        _waive(d, blocked)
+    elif blocked:
+        d.fail("NB-STATUS", blocked)
 
     if d.priced:
         _gate_edge(d, cfg)
         _veto(d, market, ctx)
         _label_and_confidence(d, market, ctx)
     return d
+
+
+def _injury_waived(ctx: PassContext, game: BoardGame) -> bool:
+    """Eric waived the injury gates for this game's US Eastern slate (cfg:injuries.waived_slates)."""
+    slate = game.tip.astimezone(ZoneInfo("America/New_York")).date().isoformat()
+    return slate in (ctx.cfg.get("injuries.waived_slates") or ())
+
+
+def _waive(d: Decision, what: str) -> None:
+    """Log what the waiver let through, apart from `notes` so the primary code keeps its note;
+    the decision carries both into the ledger and settlement."""
+    if "injury" not in d.waivers:
+        d.waivers.append("injury")
+    d.waived.append(what)
 
 
 def _tier_b(ctx: PassContext, us_market: str):

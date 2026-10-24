@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.5.5
+  version: 0.6.0
   updated: 2026-10-23
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -89,7 +89,11 @@ platform:
     bare_integer:
       value: null
       status: UNCONFIRMED
-      source: "not seen on the NBA board"
+      source: "a bare N of 1 or more is not seen on the NBA board; 0 is pickem_zero"
+    pickem_zero:
+      value: "0 = pick'em: no handicap, the winner wins; overtime decides every game, so it never pushes"
+      status: CONFIRMED
+      source: "Eric 2026-10-25: 「0是平手盤，誰贏誰贏」 (HOU@ATL handicap on the 2026-10-24 ET slate)"
     single_digit_tail:
       value: reject
       status: RULE
@@ -390,6 +394,10 @@ injuries:
     value: [Questionable, Doubtful]
     status: RULE
     source: "brief 1.6"
+  waived_slates:
+    value: ["2026-10-24"]
+    status: CONFIRMED
+    source: "Eric 2026-10-25 06:3x Taipei: 「今天放行所有傷病」, for the 2026-10-24 ET slate then being played. Injury blocks (R-9.2 report age, R-9.4 listed players) are logged but do not block; decisions carry waivers=[injury], and such shadow bets do not count toward cfg:golive"
   nonblocking_reasons:
     value: ["G League - Two-Way"]
     status: CONFIRMED

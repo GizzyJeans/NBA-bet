@@ -221,3 +221,13 @@ def test_decision_record_is_serialisable(validated):
     ctx = context(validated, board(), tier_b=tier_b())
     record = d.to_record(ctx)
     assert json.loads(json.dumps(record))["stake"] == 1000
+
+
+def test_injury_waiver_is_slate_scoped_and_recorded(validated):
+    blocked = {"blocking": {"NYK@BOS": ["Brunson"]}}
+    waived = with_values(validated, **{"injuries.waived_slates": ["2026-11-02"]})     # the slate of TIP
+    d = run(waived, tier_b=tier_b(), **blocked)[("handicap", "home")]
+    assert "NB-STATUS" not in d.codes and d.waivers == ["injury"] and "Brunson" in d.waived[0]
+    assert not any("傷病放行" in n for n in d.notes)                    # the primary code keeps its note
+    other = with_values(validated, **{"injuries.waived_slates": ["2026-11-03"]})
+    assert run(other, tier_b=tier_b(), **blocked)[("handicap", "home")].primary == "NB-STATUS"

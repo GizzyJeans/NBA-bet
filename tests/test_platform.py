@@ -5,7 +5,7 @@ import pytest
 
 from bethero_nba import platform
 from bethero_nba.odds import Leg
-from bethero_nba.platform import LineKind, parse_line
+from bethero_nba.platform import LineKind, notation_status, parse_line
 
 SAMPLE = "data/boards/2026-10-21/sample_ts-unknown.json"
 
@@ -94,3 +94,10 @@ def test_board_schema_errors(root, mutate, message):
     mutate(broken)
     with pytest.raises(platform.BoardError, match=message):
         platform.parse_board(broken)
+
+
+def test_zero_is_a_confirmed_pickem(cfg):
+    line = parse_line("0")                          # Eric 2026-10-25: 0是平手盤，誰贏誰贏
+    assert line.kind is LineKind.PICKEM and line.effective == 0.0
+    assert notation_status(line, cfg) == "CONFIRMED"
+    assert parse_line("1").kind is LineKind.BARE    # other bare integers stay unconfirmed

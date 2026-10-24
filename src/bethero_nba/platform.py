@@ -48,6 +48,7 @@ class LineKind(str, Enum):
     FLAT = "flat"
     TAIL = "tail"
     BARE = "bare"
+    PICKEM = "pickem"
     NOT_OFFERED = "not_offered"
     UNREADABLE = "unreadable"
 
@@ -58,6 +59,7 @@ NOTATION_KEYS = {
     LineKind.FLAT: "flat_line",
     LineKind.TAIL: "tail_line",
     LineKind.BARE: "bare_integer",
+    LineKind.PICKEM: "pickem_zero",
 }
 
 _HALF = re.compile(r"(\d+)\.5")
@@ -103,6 +105,8 @@ def parse_line(text: str) -> PlatformLine:
         legs = ((Leg(base - 0.5, share), Leg(float(base), 1.0 - share)) if sign == "+"
                 else (Leg(float(base), 1.0 - share), Leg(base + 0.5, share)))
         return PlatformLine(raw, LineKind.TAIL, legs)
+    if s == "0":                       # pick'em: overtime decides every game, so it never pushes
+        return PlatformLine(raw, LineKind.PICKEM, (Leg(0.0, 1.0),))
     if _BARE.fullmatch(s):
         return PlatformLine(raw, LineKind.BARE, note="bare integer without 平")
     if _SINGLE_DIGIT_TAIL.fullmatch(s):

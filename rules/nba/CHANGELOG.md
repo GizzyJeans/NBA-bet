@@ -2,6 +2,14 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.0 · 2026-10-25
+
+- New notation `platform.notation.pickem_zero`, CONFIRMED (Eric 2026-10-25: 「0是平手盤，誰贏誰贏」). A handicap of `0` is a pick'em: no handicap, the winner wins. Overtime decides every game, so it never pushes. A bare N of 1 or more stays UNCONFIRMED (`NB-FORMAT`).
+- New `injuries.waived_slates` = ["2026-10-24"], CONFIRMED (Eric 2026-10-25: 「今天放行所有傷病」).
+  - For that slate, the injury blocks are logged but do not block: the report-age `NB-STALE` (R-9.2) and listed key players `NB-STATUS` (R-9.4).
+  - Decisions record `waivers: [injury]`. Their shadow bets are reported but excluded from go-live readiness (stricter, flagged to Eric).
+  - The FINAL-eligibility of R-4.5 (game-day report published, referees posted) still applies.
+
 ## 0.5.5 · 2026-10-23
 
 - `snapshots.require_referee_assignments` stays true; its label changes from RULE to CONFIRMED.
