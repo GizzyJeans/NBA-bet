@@ -46,3 +46,12 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
   2. OFF is not the stricter value: a model that is on can only block or downgrade, never add.
 - **Impact:** none on any number, gate or stake. The model has never run in a pass. It could have led Eric to choose ON expecting an immediate effect.
 - **Fix:** config 0.5.1 labels it `RULE` with an accurate source; RULES R-8.5, README and VALIDATION.md §1 state what turning it on needs; the follow-up reply explains both points.
+
+## E-007 · 2026-10-24 · Phase 3 `dist.anchor` (Tier B anchoring)
+
+- **Wrong:** `anchor` searched for the root in one fixed window of ±15 points around the US reference line. For a big line (SAS@DAL, home +15.5 on 2026-10-24), the window's far end asked the empirical family, the comparison model, about 30-point lines it has no history for. Anchoring raised an error, and Tier B failed closed with `NB-TIER-C`, although the root lies within a point of the line.
+- **Impact:**
+  - One market in the 2026-10-24 ET pass: the SAS@DAL handicap logged `NB-TIER-C` first.
+  - Re-run on the stored snapshot with the fix, it is priced at Tier B: SAS 15平, EV +0.7% ± 3.3%, still `NB-STATUS` and below `min_ev`.
+  - No bet, stake or validated number changed. Bisection has a unique root, so every line that anchored before anchors to the same point.
+- **Fix:** the root is searched in the narrowest window around the line that brackets it (±3, then ±6, then ±15). Test `test_anchoring_a_big_line_stays_inside_the_history`.

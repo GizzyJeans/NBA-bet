@@ -197,14 +197,18 @@ class Anchored:
         return a
 
 
-def anchor(family, ref_line: float, p_ref: float, *, search: float = 15.0) -> Anchored:
+def anchor(family, ref_line: float, p_ref: float, *,
+           search: tuple[float, ...] = (3.0, 6.0, 15.0)) -> Anchored:
     """Find s* such that the family gives the consensus P(home covers ref_line)
     (spreads) or P(over ref_line) (totals) = p_ref.
 
     The reference point is the half-point X must exceed: home -5.5 needs
     X > 5.5; over 228.5 needs X > 228.5. Integer reference lines are anchored
     on the no-push share. P(cover) rises as s moves toward the home side, so
-    bisection on s is monotone.
+    bisection on s is monotone and its root is unique. The root is searched in
+    the narrowest window around the line that brackets it: a wide window
+    around a 15-point line reaches lines the empirical family has no history
+    for (ERRATA E-007).
     """
     market = family.market
     point = -ref_line if market == "spreads" else ref_line
@@ -220,11 +224,20 @@ def anchor(family, ref_line: float, p_ref: float, *, search: float = 15.0) -> An
         return prob - p_ref
 
     # spreads: a more negative s means a stronger home side; totals: higher s, more overs
-    lo, hi = ref_line - search, ref_line + search
     sign = -1.0 if market == "spreads" else 1.0
-    f_lo, f_hi = sign * gap(lo), sign * gap(hi)
-    if f_lo > 0 or f_hi < 0:
-        raise ValueError(f"cannot anchor {market} at {ref_line} to {p_ref:.4f} within ±{search}")
+    bracket = None
+    for width in search:
+        lo, hi = ref_line - width, ref_line + width
+        try:
+            f_lo, f_hi = sign * gap(lo), sign * gap(hi)
+        except ValueError:                 # no history that far out; a wider window is no better
+            break
+        if f_lo <= 0 <= f_hi:
+            bracket = (lo, hi)
+            break
+    if bracket is None:
+        raise ValueError(f"cannot anchor {market} at {ref_line} to {p_ref:.4f} within ±{max(search)}")
+    lo, hi = bracket
     for _ in range(60):
         mid = 0.5 * (lo + hi)
         if sign * gap(mid) < 0:

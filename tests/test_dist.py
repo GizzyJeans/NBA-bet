@@ -86,3 +86,19 @@ def test_history_csv_round_trip(tmp_path):
     bad.write_text("season,date\n", encoding="utf-8")
     with pytest.raises(ValueError, match="missing columns"):
         dist.load_history(bad)
+
+
+def test_anchoring_a_big_line_stays_inside_the_history():
+    """A 15.5-point line: a ±15 window would ask the empirical family about
+    30-point lines it has never seen (ERRATA E-007)."""
+    rows = [HistoryRow("2024-25", date(2025, 1, 1), "BOS", "NYK", 110 + m if m > 0 else 110, 110 - m if m < 0 else 110,
+                       spread, 228.5, "synthetic")
+            for spread in (12.5, 13.5, 14.5, 15.5, 16.5, 17.5)
+            for m in range(-round(spread) - 20, -round(spread) + 21) if m != 0]      # centred on -spread
+    fam = EmpiricalFamily.fit(rows, "spreads", bucket_width=0.5, bandwidth=2.0)
+    with pytest.raises(ValueError):
+        fam.pmf(30.5)
+    anchored = dist.anchor(fam, 15.5, 0.5)
+    assert 13.0 < anchored.s_star < 18.0
+    with pytest.raises(ValueError):
+        dist.anchor(fam, 15.5, 0.5, search=(15.0,))                 # the old single wide window
