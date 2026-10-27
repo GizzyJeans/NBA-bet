@@ -2,6 +2,16 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.1 · 2026-10-27
+
+- R-16.5: every report has a 各場 EV section (Eric 2026-10-27: 「以後每天都列出各場ev」). One row per game gives:
+  - the EV of both sides of each market (worst de-vig method, %), with the better side's noise;
+  - ★ for a qualifying shadow bet;
+  - a short tag for any stop other than EV;
+  - the US main lines.
+
+  It is informational only; no gate changed. The §16 template shows it.
+
 ## 0.6.0 · 2026-10-25
 
 - New notation `platform.notation.pickem_zero`, CONFIRMED (Eric 2026-10-25: 「0是平手盤，誰贏誰贏」). A handicap of `0` is a pick'em: no handicap, the winner wins. Overtime decides every game, so it never pushes. A bare N of 1 or more stays UNCONFIRMED (`NB-FORMAT`).

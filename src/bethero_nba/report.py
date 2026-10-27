@@ -1,9 +1,9 @@
 """Traditional Chinese report, mobile-first (RULES §16).
 
 Header, a bets table of exactly seven columns with one detail line per bet,
-a no-bet table with one row per evaluated market, what would change each
-recommendation, and a transcription check that repeats every board line as
-read.
+every game's EV by market and side (R-16.5), a no-bet table with one row per
+evaluated market, what would change each recommendation, and a transcription
+check that repeats every board line as read.
 """
 
 from __future__ import annotations
@@ -20,6 +20,11 @@ TAIPEI = ZoneInfo("Asia/Taipei")
 MARKET_ZH = {"handicap": "讓分", "total": "大小", "moneyline": "獨贏"}
 LEVEL_ZH = {"High": "高", "Medium": "中", "Low": "低"}
 TS_SOURCE_ZH = {"screenshot_clock": "手機時間", "received": "收到時間", "unknown": "時間不明"}
+# short tags for a market stopped by something other than its EV (R-16.5)
+STOP_TAG = {"NB-SCOPE": "範圍", "NB-PAUSED": "暫停", "NB-FORMAT": "寫法", "NB-SETTLEMENT": "結算",
+            "NB-STALE": "過時", "NB-DATA": "家數", "NB-SANITY": "差距", "NB-TIER-C": "換算",
+            "NB-STATUS": "傷病", "NB-MODEL-VETO": "模型", "NB-CORR": "同場", "NB-CAP": "上限",
+            "NB-MIN-STAKE": "最低"}
 
 
 @dataclass
@@ -60,6 +65,71 @@ def _detail(d: Decision) -> str:
     flags = "、".join(d.flags) if d.flags else "無"
     return (f"- {_game_label(d.game)}：{tier}｜{d.edge_label or '—'}｜情境：{flags}"
             f"｜最差可接受：{d.worst_line or '—'}")
+
+
+def _ev(d: Decision | None) -> str:
+    if d is None or d.ev_worst is None:
+        return "—"
+    text = f"{d.ev_worst * 100:+.1f}".replace("-", "−")
+    return f"★{text}" if d.is_bet else text
+
+
+def _ev_cell(sides: list[Decision]) -> str:
+    """Both sides of one market: EV in %, the better side's noise, and why it stopped."""
+    if not sides or all(d.primary == "NB-NOT-OFFERED" for d in sides):
+        return "未開"
+    best = max(sides, key=lambda o: (o.is_bet, o.ev_worst is not None, o.ev_worst or -9))
+    by_side = {d.side: d for d in sides}
+
+    def part(label: str, d: Decision | None) -> str:
+        noise = (f" (±{d.sigma['ev'] * 100:.1f})" if d is best and d.ev_worst is not None
+                 and d.sigma.get("ev") is not None else "")
+        return f"{label} {_ev(d)}{noise}"
+
+    game, market = sides[0].game, sides[0].market
+    if market == "handicap":
+        giver = next((d for d in sides if d.laying), sides[0])
+        laying = game.home if giver.side == "home" else game.away
+        taking = game.away if giver.side == "home" else game.home
+        raw = giver.line.raw if giver.line else "—"
+        cell = (f"{part(f'{laying.zh}讓 {raw}', giver)} ／ "
+                f"{part(taking.zh, by_side.get('away' if giver.side == 'home' else 'home'))}")
+    elif market == "total":
+        raw = sides[0].line.raw.lstrip("大小") if sides[0].line else "—"
+        cell = f"{raw}：{part('大', by_side.get('over'))} ／ {part('小', by_side.get('under'))}"
+    else:
+        cell = f"{part(game.home.zh, by_side.get('home'))} ／ {part(game.away.zh, by_side.get('away'))}"
+    tag = None if best.is_bet else STOP_TAG.get(best.primary or "")
+    return cell + (f"〔{tag}〕" if tag else "")
+
+
+def _us_cell(decisions: list[Decision]) -> str:
+    """The US consensus main lines the pass compared against."""
+    parts = []
+    spread = next((d for d in decisions if d.market == "handicap" and d.l_ref is not None), None)
+    total = next((d for d in decisions if d.market == "total" and d.l_ref is not None), None)
+    if spread is not None:
+        if spread.l_ref == 0:
+            parts.append("pk")
+        else:
+            favourite = spread.game.home if spread.l_ref < 0 else spread.game.away
+            parts.append(f"{favourite.zh}讓 {abs(spread.l_ref):g}")
+    if total is not None:
+        parts.append(f"{total.l_ref:g}")
+    return "、".join(parts) or "—"
+
+
+def _ev_table(decisions: list[Decision]) -> list[str]:
+    """R-16.5: every game, every market, both sides (Eric 2026-10-27: 以後每天都列出各場ev)."""
+    lines = ["## 各場 EV",
+             "每 1 元注碼的期望值（%），取三種去水方法中最差者；括號是較佳一側的雜訊；★ 是合格影子注；〔〕是擋下原因。",
+             "", "| 比賽 | 讓分 | 大小 | 獨贏 | 美盤主盤 |", "|---|---|---|---|---|"]
+    labels = list(dict.fromkeys(d.game.label for d in decisions))
+    for label in labels:
+        ds = [d for d in decisions if d.game.label == label]
+        cells = [_ev_cell([d for d in ds if d.market == m]) for m in ("handicap", "total", "moneyline")]
+        lines.append(f"| {_game_label(ds[0].game)} | {' | '.join(cells)} | {_us_cell(ds)} |")
+    return lines
 
 
 def _no_bet_rows(decisions: list[Decision]) -> list[tuple[Decision, str]]:
@@ -115,6 +185,7 @@ def render(decisions: list[Decision], meta: ReportMeta) -> str:
         lines += [_detail(d) for d in bets]
     else:
         lines.append("今天沒有合格的注。")
+    lines += [""] + _ev_table(decisions)
     lines += ["", "## 不下注", "| 比賽 | 市場 | 代碼 | 說明 |", "|---|---|---|---|"]
     for d, code in _no_bet_rows(decisions):
         lines.append(f"| {_game_label(d.game)} | {MARKET_ZH[d.market]} | {code} | {_explain(d)} |")

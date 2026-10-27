@@ -43,6 +43,7 @@ py -m bethero_nba.analyze --board <board.json> --live --injury-pdf <pdf> --refer
 - **`--exposure-used`** is shadow stake already logged today on this slate.
 - **Reply to Eric in 繁體中文** from the generated report (`reports/<slate>/`):
   - qualifying shadow bets with EV ± σ, stake and worst acceptable line;
+  - then the report's 各場 EV table, every game and both sides of each market (R-16.5; Eric 2026-10-27: 「以後每天都列出各場ev」);
   - then each no-bet with its code;
   - then what would change the decision.
 

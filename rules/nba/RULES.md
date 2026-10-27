@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.6.0 · 2026-10-25 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
+**Version 0.6.1 · 2026-10-27 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -297,6 +297,13 @@ Confidence is informational; it never changes a stake.
 - **R-16.1** Language `cfg:report.language`; times in `cfg:report.display_tz`. The header states the mode, the times of the US snapshot, the platform screenshot, and the injury report (R-4.6), the bankroll, and today's exposure against the daily cap. In `shadow` mode the header says 影子 and every stake is a shadow stake.
 - **R-16.2** The bets table has exactly these `cfg:report.max_bet_columns` columns: 比賽 | 選項 | 平台盤/賠率 | 公平機率 | EV(±) | 注額 | 信心. Under it, one line per bet: tier, edge label (R-12.6), scenario flags, and the worst acceptable platform line, i.e. the worst line at which G8 and G9 still pass. Lines are searched in tail steps of 5 (0.025 points), 獨贏 prices in steps of 0.01, and the search stops where the ticket can no longer be priced.
 - **R-16.3** The no-bet table has the columns 比賽 | 市場 | 代碼 | 說明, one row per evaluated market. The ledger keeps both sides (R-14.1).
+- **R-16.5** Every report has the section 各場 EV, with one row per game (Eric 2026-10-27: 「以後每天都列出各場ev」). Each row gives:
+  - for each market, the EV of both sides, in % under the worst de-vig method, with the better side's noise;
+  - ★ on a qualifying shadow bet;
+  - a short tag for any stop other than EV (家數 = `NB-DATA`, 傷病 = `NB-STATUS`, 過時 = `NB-STALE`, and so on);
+  - the US main lines the pass compared against.
+
+  It is informational. A market without ★ is not a bet, whatever its EV.
 - **R-16.4** The report ends with what would change each recommendation (「若 X 確定缺陣 → 取消」 style) and a transcription check listing every platform line as it was read.
 
 Template, filled with the §18 example:
@@ -313,6 +320,14 @@ Template, filled with the §18 example:
 | A@H 08:30 | H 讓 4.5 | 4.5 / 0.95 | 55.6% | +8.4% (±1.0) | 1,000 | 中 |
 
 - A@H：Tier B（美盤 −5.5 換算 1 分）｜LAG：06:45 官方傷病報告 A 隊 X 改列缺陣｜情境：無｜最差可接受：讓 5-30
+
+## 各場 EV
+每 1 元注碼的期望值（%），取三種去水方法中最差者；括號是較佳一側的雜訊；★ 是合格影子注；〔〕是擋下原因。
+
+| 比賽 | 讓分 | 大小 | 獨贏 | 美盤主盤 |
+|---|---|---|---|---|
+| A@H | H讓 4.5 ★+8.4 (±1.0) ／ A −13.4 | 228.5：大 −3.0 (±0.3) ／ 小 −3.0 | H −2.1 (±0.6) ／ A −6.0 | H讓 5.5、228.5 |
+| C@D | D讓 5+50 — ／ C —〔換算〕 | 231平：大 −1.2 (±0.4) ／ 小 −4.7 | 未開 | D讓 5、231.5 |
 
 ## 不下注
 | 比賽 | 市場 | 代碼 | 說明 |
