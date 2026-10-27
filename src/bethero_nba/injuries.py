@@ -33,6 +33,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
+import json
+import math
 import re
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time
@@ -282,33 +284,47 @@ class Timeline:
 
 def key_players(minutes: dict[str, list[float]], cfg) -> set[str]:
     """Players averaging at least key_player_min_minutes over their last
-    key_player_window_games games (RULES R-9.3)."""
+    key_player_window_games games (RULES R-9.3). A shorter list is not that
+    average, so its player counts as key."""
     window = cfg.get("injuries.key_player_window_games")
     threshold = cfg.get("injuries.key_player_min_minutes")
-    return {p for p, mins in minutes.items() if mins and sum(mins[-window:]) / len(mins[-window:]) >= threshold}
+    return {p for p, mins in minutes.items() if len(mins) < window or sum(mins[-window:]) / window >= threshold}
 
 
-def blocking_players(timeline: Timeline, tricodes: tuple[str, str],
-                     minutes: dict[str, dict[str, list[float]]] | None, cfg, at: datetime) -> list[str]:
-    """Players currently listed with a blocking status who are key (RULES R-9.3).
+def listed_players(timeline: Timeline, tricodes: tuple[str, str],
+                   minutes: dict[str, dict[str, list[float]]] | None, cfg,
+                   at: datetime) -> tuple[list[str], list[str]]:
+    """(blocking, cleared) among the players currently listed with a blocking status.
 
-    A listed player whose recent minutes are not supplied counts as key: missing
-    data can only block. So minutes are needed only to clear a bench player.
-    Reasons in injuries.nonblocking_reasons (a two-way player's G League
-    assignment, Eric 2026-10-23) never block."""
-    blocking = set(cfg.get("injuries.blocking_statuses"))
+    A listed player blocks when he is key (RULES R-9.3). One whose recent
+    minutes are not supplied counts as key: missing data can only block. So
+    minutes are needed only to clear a bench player, and a cleared player
+    carries his average so the report can show it. Reasons in
+    injuries.nonblocking_reasons (a two-way player's G League assignment,
+    Eric 2026-10-23) never block."""
+    statuses = set(cfg.get("injuries.blocking_statuses"))
     exempt = set(cfg.get("injuries.nonblocking_reasons"))
-    found = []
+    window = cfg.get("injuries.key_player_window_games")
+    blocking, cleared = [], []
     for tricode in tricodes:
         known = (minutes or {}).get(tricode, {})
         keys = key_players(known, cfg)
         for player in sorted(timeline.players(tricode)):
             record = timeline.status_at(tricode, player, at)
-            if record is None or record.status not in blocking or record.reason.strip() in exempt:
+            if record is None or record.status not in statuses or record.reason.strip() in exempt:
                 continue
             if player not in known or player in keys:
-                found.append(f"{player}（{record.status}）")
-    return found
+                blocking.append(f"{player}（{record.status}）")
+            else:
+                average = sum(known[player][-window:]) / window
+                cleared.append(f"{player}（{record.status}，本季近 {window} 場平均 {average:.1f} 分鐘）")
+    return blocking, cleared
+
+
+def blocking_players(timeline: Timeline, tricodes: tuple[str, str],
+                     minutes: dict[str, dict[str, list[float]]] | None, cfg, at: datetime) -> list[str]:
+    """Players currently listed with a blocking status who are key (RULES R-9.3, R-9.4)."""
+    return listed_players(timeline, tricodes, minutes, cfg, at)[0]
 
 
 def gameday_window_start(tricode: str, tip: datetime) -> datetime:
@@ -345,6 +361,66 @@ def final_eligible(tip: datetime, tricodes: tuple[str, str], submissions: dict[s
 
 def report_date_et(moment: datetime) -> date:
     return moment.astimezone(EASTERN).date()
+
+
+# -------------------------------------------------------------------- minutes
+
+
+class MinutesError(ValueError):
+    """A minutes transcription that does not follow the README format."""
+
+
+@dataclass(frozen=True)
+class Minutes:
+    """Listed players' minutes, transcribed from Eric's game-log screenshots (RULES R-9.3).
+
+    `players` maps a tricode to each player's name as the injury report prints
+    it and his minutes in his games played this season, oldest first. No source
+    feeds this automatically: the free API checked on 2026-10-27 serves only a
+    three-day window, and 5 of the 10 team box scores it gave for 2026-10-26 UTC
+    left out players (RULES Appendix B)."""
+    slate_et: date
+    seen_at: datetime
+    source: str
+    players: dict[str, dict[str, list[float]]]
+    sha256: str
+
+    def fresh_for(self, slate_et: date, at: datetime, cfg) -> bool:
+        """Taken on the slate's US Eastern date, late enough that the previous
+        night's games are in the log (cfg:injuries.minutes_screenshot_from_et),
+        and not after the analysis."""
+        start = time.fromisoformat(cfg.get("injuries.minutes_screenshot_from_et"))
+        return self.slate_et == slate_et and datetime.combine(slate_et, start, EASTERN) <= self.seen_at <= at
+
+
+def load_minutes(path: Path | str) -> Minutes:
+    raw = Path(path).read_bytes()
+    try:
+        data = json.loads(raw.decode("utf-8"))
+        slate_et = date.fromisoformat(data["slate_et"])
+        seen_at = datetime.fromisoformat(data["seen_at"])
+        source = str(data["source"]).strip()
+        by_team = data["players"].items()
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise MinutesError(f"{path}: not a minutes transcription ({exc})") from None
+    if seen_at.tzinfo is None or not source:
+        raise MinutesError(f"{path}: seen_at needs a UTC offset and source must say whose screenshot it was")
+    players: dict[str, dict[str, list[float]]] = {}
+    for key, by_name in by_team:
+        try:
+            tricode = team(key).tricode
+        except KeyError:
+            raise MinutesError(f"{path}: unknown team {key!r}") from None
+        if not isinstance(by_name, dict):
+            raise MinutesError(f"{path}: {tricode}: expected player names and their minutes")
+        players[tricode] = {}
+        for name, values in by_name.items():
+            if not isinstance(values, list) or not all(
+                    isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v >= 0
+                    for v in values):
+                raise MinutesError(f"{path}: {tricode} {name}: minutes must be a list of numbers, 0 or more")
+            players[tricode][name] = [float(v) for v in values]
+    return Minutes(slate_et, seen_at, source, players, hashlib.sha256(raw).hexdigest())
 
 
 # ---------------------------------------------------------------------- CLI

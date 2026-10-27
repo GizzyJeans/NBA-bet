@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.6.1 · 2026-10-27 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
+**Version 0.6.2 · 2026-10-27 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -162,7 +162,11 @@ Prohibited in v1:
   - The pass records the PDF's SHA-256. The PDF itself stays out of git.
   - A JSON transcription (format in README) is the fallback, with the report time as its provenance.
 - **R-9.2** At analysis time the newest stored injury report must be at most `cfg:snapshots.injury_report_max_age_min` old; otherwise `NB-STALE`. If the report cannot be fetched → `NB-STATUS`: missing data is not "no injuries".
-- **R-9.3** A key player averaged at least `cfg:injuries.key_player_min_minutes` minutes over his last `cfg:injuries.key_player_window_games` games played. *Why minutes:* no licensed impact metric exists yet, and this proxy can only block. A player listed in a blocking status whose recent minutes are not supplied counts as key: missing data can only block. So minutes are needed only to clear a bench player.
+- **R-9.3** A key player averaged at least `cfg:injuries.key_player_min_minutes` minutes over his last `cfg:injuries.key_player_window_games` games played this season (preseason excluded). *Why minutes:* no licensed impact metric exists yet, and this proxy can only block. A player listed in a blocking status whose recent minutes are not supplied counts as key: missing data can only block. So minutes are needed only to clear a bench player. Fewer games than the window is not that average, so such a player also counts as key.
+  - Minutes come from Eric (`cfg:injuries.minutes_source`): a screenshot of the player's game log on any site he browses. It is transcribed to `data/minutes/<slate>.json` with the time it was taken, committed, and read by `analyze --minutes`. Names are written as the injury report prints them; a name the report does not list on that team is recorded as unmatched.
+  - A transcription counts for a slate only if the screenshot was taken on that slate's US Eastern date, at or after `cfg:injuries.minutes_screenshot_from_et` and before the pass. Otherwise the pass ignores it and records `used: false`.
+  - The pass records the file's SHA-256, and the report names each cleared player with his average. A market that a clearance lets through is an ordinary shadow bet: the rule applied, nothing was waived.
+  - No source feeds minutes automatically. The free API checked on 2026-10-27 cannot (Appendix B).
 - **R-9.4** A key player listed in `cfg:injuries.blocking_statuses` → `NB-STATUS` for that game, unless both EV ≥ 0 under the adverse resolution and EV ≥ `cfg:gates.min_ev` in expectation can be computed. That needs a validated impact metric, which v1 does not have, so in v1 it always blocks. Exception (Eric 2026-10-23): a listing whose reason is in `cfg:injuries.nonblocking_reasons` (a two-way player's "G League - Two-Way" assignment) never blocks. Slate waiver: for a US Eastern slate in `cfg:injuries.waived_slates` (set only by Eric's message), the injury blocks of R-9.2 and R-9.4 are logged and do not block. Such decisions carry `waivers: [injury]`, and their shadow bets do not count toward `cfg:golive`.
 - **R-9.5** A news-lag edge requires all of: a sourced trigger with timestamp T; the US consensus moved after T; a platform screenshot taken after T that still shows the pre-move line; and synchronized snapshots (R-4.4). It is labelled `LAG`, and Eric weighs account-limitation risk separately.
 
@@ -305,6 +309,7 @@ Confidence is informational; it never changes a stake.
 
   It is informational. A market without ★ is not a bet, whatever its EV.
 - **R-16.4** The report ends with what would change each recommendation (「若 X 確定缺陣 → 取消」 style) and a transcription check listing every platform line as it was read.
+- **R-16.6** Under 什麼會改變建議, one line per game whose markets pass every per-market gate but are held at `NB-STATUS` only by listed key players (R-9.3). The line gives the markets with their EV, the players, and what clears them: a screenshot of each player's game log this season. G11 and G12 run only for released markets. A player cleared by his minutes is named in the header with his average (替補放行). Both are informational; the gates decide.
 
 Template, filled with the §18 example:
 
@@ -429,7 +434,7 @@ Checked on 2026-10-21 through web-search result summaries. The primary pages cou
 | Participation policy | 2023-24 version: "star" definition; at most one star out per game; stars available for national TV and the Cup | [ESPN, 2023](https://africa.espn.com/nba/story/_/id/38392750/source-nba-board-governors-approve-tougher-rest-rule) | latest found; 2026-27 changes not verified |
 | US DST | ends 2026-11-01, resumes 2027-03-14 | Python `zoneinfo` (tzdata), computed 2026-10-21 | verified |
 
-## Appendix B. Data sources and access (2026-10-21, updated 2026-10-23)
+## Appendix B. Data sources and access (2026-10-21, updated 2026-10-27)
 
 On 2026-10-21 this cloud environment's network policy allowed only `api.the-odds-api.com` among the hosts below. Eric then opened more domains (2026-10-23), and the probes are recorded per row. Whatever stays blocked must be fetched on Eric's Windows machine; WAFs are never worked around.
 
@@ -440,6 +445,7 @@ On 2026-10-21 this cloud environment's network policy allowed only `api.the-odds
 | Final scores for settlement | The Odds API `/scores` (last 3 days) | reachable | same | primary |
 | Injury report | official.nba.com, PDFs on ak-static.cms.nba.com | 2026-10-23: official.nba.com answers Akamai 403 "Access Denied" to this environment; ak-static.cms.nba.com 503 at its root | terms not retrievable from here | needed for G7: Eric downloads the PDF in his browser and `analyze --injury-pdf` reads it (layout checked on the 2026-10-23 07:15 AM ET report); a JSON transcription is the fallback (R-9.1) |
 | Referee assignments | official.nba.com/referee-assignments | same Akamai 403 | same | needed for G7, same route |
+| Player minutes (R-9.3) | API-Sports API-NBA v2 (`v2.nba.api-sports.io`), free plan | 2026-10-27: reachable once Eric opened the domain; key in `API_FOOTBALL_KEY` | The terms and documentation pages (api-sports.io, www.api-football.com) answer a Cloudflare challenge, which is not worked around; third-party summaries say the data may not be resold. Probed with 11 requests on 2026-10-27 UTC, raw responses kept on this machine only. The free plan refuses season queries ("try from 2022 to 2024") and dates outside a three-day window ("try from 2026-10-26 to 2026-10-28"), so 10 games of minutes would need about three weeks of unbroken daily pulls. In 5 of the 10 team box scores it served for 2026-10-26 UTC, the players' points fall 3 to 19 short of the team's score, so players are missing; another team's minutes add up to 266 in a 240-minute game | not used; minutes come from Eric's game-log screenshots |
 | Schedule, box scores (model, flags) | cdn.nba.com, stats.nba.com, www.nba.com | 2026-10-23: cdn.nba.com S3 403, stats.nba.com 301, www.nba.com refused by the proxy | not verified | model and flags; not used yet |
 | Historical closing lines and scores (§7) | Sportsbook Reviews Online archive (www.sportsbookreviewsonline.com) | 2026-10-23: reachable, but every archive path returns 404; the archive is gone | — | not available |
 | Same, in use | GitHub `kyleskom/NBA-Machine-Learning-Sports-Betting` at `8e36b0b`, `Data/OddsData.sqlite` (SHA-256 `4a803d41…`), read with git | reachable | no licence file: used on this machine only, game rows never committed; book and line timing not stated (older seasons from the SBR archive, 2022-23 on from SBR's scoreboard, default FanDuel) | §7 validation (VALIDATION.md R1) |

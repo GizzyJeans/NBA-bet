@@ -21,7 +21,7 @@ Eric runs this project. Talk to him in Traditional Chinese (繁體中文). Code,
 7. **Shadow mode** until Eric's explicit go-live message (R-12.7). `cfg:golive` readiness (strict, Eric 2026-10-23) is reported by `settle`. It never changes the mode by itself, and neither does Claude.
 8. **Data access.**
    - Platform data comes only from Eric's screenshots. Never automate the platform.
-   - Nothing fetches from NBA hosts automatically, and WAFs are never worked around. The injury report is the PDF Eric saves (R-9.1).
+   - Nothing fetches from NBA hosts automatically, and WAFs are never worked around. The injury report is the PDF Eric saves (R-9.1). Listed players' minutes come only from Eric's game-log screenshots (R-9.3).
    - Network calls need `--live` (R-4.7) and go through the per-host rate limit, with the User-Agent naming the repository and never Eric's email.
    - `ODDS_API_KEY` is read from the environment only. Never print it or commit it.
    - The budget guard (`us_odds.*`) is never bypassed.

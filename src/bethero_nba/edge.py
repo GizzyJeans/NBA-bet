@@ -66,6 +66,7 @@ class PassContext:
     final_eligible: dict[str, bool] | None = None    # game label -> RULES R-4.5; None = unknown
     injury_report_ts: datetime | None = None
     blocking: dict[str, list[str]] | None = None      # game label -> key players Q/D; None = no data
+    cleared: dict[str, list[str]] | None = None       # game label -> listed players cleared by minutes (R-9.3)
     tier_b: Any | None = None                         # VALIDATED distribution provider, else None
     model: Callable[[BoardGame], dict | None] | None = None   # {"home_margin", "total"}
     lag: Callable[[BoardGame, str], bool] | None = None       # RULES R-9.5 holds
@@ -106,6 +107,8 @@ class Decision:
     worst_line: str | None = None
     waivers: list[str] = field(default_factory=list)     # gates Eric waived for this slate
     waived: list[str] = field(default_factory=list)      # what each waiver let through
+    held_by: list[str] = field(default_factory=list)     # listed key players, when they alone hold G7
+    cleared: list[str] = field(default_factory=list)     # listed players cleared by their minutes (R-9.3)
 
     def fail(self, code: str, note: str | None = None) -> None:
         if code not in self.codes:
@@ -181,7 +184,7 @@ class Decision:
             "codes": self.codes, "primary": self.primary, "notes": self.notes,
             "flags": self.flags, "confidence": self.confidence, "edge_label": self.edge_label,
             "model_d": self.model_d, "worst_line": self.worst_line, "waivers": self.waivers,
-            "waived": self.waived,
+            "waived": self.waived, "held_by": self.held_by, "cleared": self.cleared,
         }
 
 
@@ -344,6 +347,9 @@ def _evaluate(game: BoardGame, market: Market, side: str, laying: bool, gc: Game
         _waive(d, blocked)
     elif blocked:
         d.fail("NB-STATUS", blocked)
+        if eligible and ctx.blocking is not None:
+            d.held_by = list(ctx.blocking[game.label])
+    d.cleared = list((ctx.cleared or {}).get(game.label, ()))
 
     if d.priced:
         _gate_edge(d, cfg)

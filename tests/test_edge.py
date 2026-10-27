@@ -231,3 +231,16 @@ def test_injury_waiver_is_slate_scoped_and_recorded(validated):
     assert not any("傷病放行" in n for n in d.notes)                    # the primary code keeps its note
     other = with_values(validated, **{"injuries.waived_slates": ["2026-11-03"]})
     assert run(other, tier_b=tier_b(), **blocked)[("handicap", "home")].primary == "NB-STATUS"
+
+
+def test_g7_names_the_listed_players_only_when_they_alone_hold_it(validated):
+    listed = {"blocking": {"NYK@BOS": ["Brunson, Jalen（Questionable）"]}}
+    held = run(validated, tier_b=tier_b(), **listed)[("handicap", "home")]
+    assert held.codes == ["NB-STATUS"] and held.held_by == ["Brunson, Jalen（Questionable）"]
+    pending = run(validated, tier_b=tier_b(), final_eligible={}, **listed)[("handicap", "home")]
+    assert pending.codes == ["NB-STATUS"] and pending.held_by == []       # the game-day report is not in
+    note = "Hart, Josh（Questionable，本季近 10 場平均 12.0 分鐘）"
+    cleared = run(validated, tier_b=tier_b(), cleared={"NYK@BOS": [note]})[("handicap", "home")]
+    assert cleared.codes == [] and cleared.cleared == [note]
+    record = cleared.to_record(context(validated, board(), tier_b=tier_b()))
+    assert record["cleared"] == [note] and record["held_by"] == []

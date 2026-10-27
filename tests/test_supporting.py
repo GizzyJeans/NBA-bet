@@ -1,5 +1,6 @@
 """injuries, context, model, bias, clv, validate on synthetic inputs."""
 
+import json
 import random
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -48,6 +49,15 @@ def test_blocking_players_treat_unknown_minutes_as_key(cfg):
     assert injuries.blocking_players(tl, ("NYK", "BOS"), minutes, cfg, t) == ["Brunson, Jalen（Questionable）"]
     bench = {"NYK": {"Brunson, Jalen": [12] * 10}}
     assert injuries.blocking_players(tl, ("NYK", "BOS"), bench, cfg, t) == []
+    assert injuries.listed_players(tl, ("NYK", "BOS"), bench, cfg, t) == (
+        [], ["Brunson, Jalen（Questionable，本季近 10 場平均 12.0 分鐘）"])
+    # nine games are not a 10-game average, so he still counts as key; of eleven, the last ten count
+    nine = {"NYK": {"Brunson, Jalen": [12] * 9}}
+    assert injuries.blocking_players(tl, ("NYK", "BOS"), nine, cfg, t) == ["Brunson, Jalen（Questionable）"]
+    eleven = {"NYK": {"Brunson, Jalen": [40] + [12] * 10}}
+    assert injuries.blocking_players(tl, ("NYK", "BOS"), eleven, cfg, t) == []
+    starter = {"NYK": {"Brunson, Jalen": [12] * 5 + [44] * 5}}           # average 28.0: key
+    assert injuries.blocking_players(tl, ("NYK", "BOS"), starter, cfg, t) == ["Brunson, Jalen（Questionable）"]
     quiet_rows = [ROWS[0], ["11/02/2026", "07:30 (ET)", "NYK@BOS", "New York Knicks", "Hart, Josh", "Out", "Knee"],
                   ROWS[3]]
     quiet = injuries.Timeline(injuries.parse_rows(quiet_rows, t))                # nobody Questionable or Doubtful
@@ -56,6 +66,45 @@ def test_blocking_players_treat_unknown_minutes_as_key(cfg):
                          "G League - Two-Way"]]
     tl2 = injuries.Timeline(injuries.parse_rows(two_way, t))
     assert injuries.blocking_players(tl2, ("NYK", "BOS"), None, cfg, t) == []      # Eric 2026-10-23: B
+
+
+def write_minutes(tmp_path, **changes):
+    data = {"schema": "bethero-nba-minutes/1", "slate_et": "2026-11-02", "seen_at": "2026-11-03T07:00:00+08:00",
+            "source": "Eric's screenshot of the player's game log, phone clock 7:00 (Taipei)",
+            "players": {"NYK": {"Brunson, Jalen": [12] * 10}}}
+    data.update(changes)
+    path = tmp_path / "minutes.json"
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_minutes_transcription_is_checked_and_must_be_from_the_slate_day(cfg, tmp_path):
+    m = injuries.load_minutes(write_minutes(tmp_path))
+    assert m.players == {"NYK": {"Brunson, Jalen": [12.0] * 10}} and len(m.sha256) == 64
+    slate, at = date(2026, 11, 2), datetime(2026, 11, 2, 18, 14, tzinfo=ET)
+    assert m.fresh_for(slate, at, cfg)                                  # 07:00 Taipei = 18:00 ET
+    at_six = injuries.load_minutes(write_minutes(tmp_path, seen_at="2026-11-02T06:00:00-05:00"))
+    assert at_six.fresh_for(slate, at, cfg)
+    early = injuries.load_minutes(write_minutes(tmp_path, seen_at="2026-11-02T05:59:00-05:00"))
+    assert not early.fresh_for(slate, at, cfg)           # the previous night's late games may be missing
+    assert not m.fresh_for(slate, datetime(2026, 11, 2, 17, 0, tzinfo=ET), cfg)   # taken after the analysis
+    assert not m.fresh_for(date(2026, 11, 3), datetime(2026, 11, 3, 18, 0, tzinfo=ET), cfg)   # another slate
+    alias = injuries.load_minutes(write_minutes(tmp_path, players={"NO": {"Jones, Herbert": [30] * 10}}))
+    assert list(alias.players) == ["NOP"]
+
+
+@pytest.mark.parametrize("changes", [
+    {"seen_at": "2026-11-02T18:00:00"},                              # no offset
+    {"source": " "},
+    {"players": {"Gotham": {"X, Y": [10] * 10}}},
+    {"players": {"NYK": {"Brunson, Jalen": [12] * 9 + [-1]}}},
+    {"players": {"NYK": {"Brunson, Jalen": [12] * 9 + [True]}}},
+    {"players": {"NYK": {"Brunson, Jalen": "12"}}},
+    {"players": ["NYK"]},
+])
+def test_malformed_minutes_are_refused(tmp_path, changes):
+    with pytest.raises(injuries.MinutesError):
+        injuries.load_minutes(write_minutes(tmp_path, **changes))
 
 
 def test_final_eligible_windows():

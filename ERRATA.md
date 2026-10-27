@@ -55,3 +55,10 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
   - Re-run on the stored snapshot with the fix, it is priced at Tier B: SAS 15平, EV +0.7% ± 3.3%, still `NB-STATUS` and below `min_ev`.
   - No bet, stake or validated number changed. Bisection has a unique root, so every line that anchored before anchors to the same point.
 - **Fix:** the root is searched in the narrowest window around the line that brackets it (±3, then ±6, then ±15). Test `test_anchoring_a_big_line_stays_inside_the_history`.
+
+## E-008 · 2026-10-27 · Reply recommending API-Sports for player minutes
+
+- **Wrong:** recommended API-Sports API-NBA as the free minutes source for R-9.3 and estimated 5–15 requests a day, one per listed player. It relied on a getting-started guide's summary ("100 requests a day, all endpoints") and did not establish the free plan's season and date limits.
+- **Correct:** the free plan refuses 2026 season queries (it offers seasons 2022–2024) and any date outside a three-day UTC window, so per-player queries are impossible. And 5 of the 10 team box scores it served for 2026-10-26 UTC left out players. It cannot supply a 10-game average.
+- **Impact:** none on any number, gate or stake; no pass read its data, and the reply had said it would be checked before use. Eric opened three domains and registered a key for a source that is not used.
+- **Fix:** checked with 11 requests before any use and not adopted (RULES 0.6.2, Appendix B). Minutes now come from Eric's game-log screenshots (R-9.3).

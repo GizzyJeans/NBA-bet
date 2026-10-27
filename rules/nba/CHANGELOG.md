@@ -2,6 +2,20 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.2 · 2026-10-27
+
+- R-9.3: listed players' minutes now come from Eric's game-log screenshots.
+  - New `injuries.minutes_source`, RULE. The screenshot is transcribed to `data/minutes/<slate>.json` and read by `analyze --minutes`. The pass records the file's SHA-256, and the report names each cleared player with his average.
+  - Why: Eric 2026-10-27 asked for a free minutes source whose terms allow it, to clear bench players (「要放行替補，需要一個免費、而且使用條款允許的上場時間來源」), and opened the domains for API-Sports, which Claude had recommended. Probed before use, it cannot serve (Appendix B, ERRATA E-008):
+    - its free plan gives only a three-day window of games;
+    - 5 of the 10 team box scores it gave for 2026-10-26 UTC left out players.
+  - New `injuries.minutes_screenshot_from_et` = "06:00", RULE. A transcription counts only if the screenshot was taken on the slate's ET date from then on, and before the pass. Stricter: the previous night's games must be in the log.
+- R-9.3, stricter (flagged to Eric): the average is over his last 10 games played this season. Fewer than 10 games is not that average, so such a player counts as key. Before, a shorter list was averaged as given.
+- R-16.6 (new): under 什麼會改變建議, one line per game whose markets pass every per-market gate and are held only by listed key players, with what to send to clear them.
+- Consequence for bets so far: none. Across the passes for the 2026-10-23, 10-24 and 10-26 slates, 48 ledger decisions stopped at `NB-STATUS`.
+  - The best EV among them was +0.8% (worst de-vig method), against `gates.min_ev` 4%.
+  - 46 also failed `NB-EV` and 2 were `NB-TIER-C`, so the injury gate alone held none of them.
+
 ## 0.6.1 · 2026-10-27
 
 - R-16.5: every report has a 各場 EV section (Eric 2026-10-27: 「以後每天都列出各場ev」). One row per game gives:

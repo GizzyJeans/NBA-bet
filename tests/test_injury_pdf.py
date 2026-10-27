@@ -117,12 +117,20 @@ def test_injury_gates_from_the_official_report(cfg):
         ReportEntry(day, "NYK", "BOS", "NYK", "Brunson, Jalen", "Questionable", "Ankle"),
         ReportEntry(date(2026, 11, 3), "NYK", "TOR", "NYK", "Brunson, Jalen", "Out", "Ankle")))  # next game
     at = datetime(2026, 11, 2, 18, 40, tzinfo=EASTERN)
-    eligible, blocking = analyze.injury_gates(official, datetime(2026, 11, 2, 9, 5, tzinfo=EASTERN), b, cfg, at)
+    refs = datetime(2026, 11, 2, 9, 5, tzinfo=EASTERN)
+    gates = analyze.injury_gates(official, refs, b, cfg, at)
     label = b.games[0].label
-    assert eligible[label] is True
-    assert blocking[label] == ["Brunson, Jalen（Questionable）"]      # today's status, not tomorrow's
-    no_refs, _ = analyze.injury_gates(official, None, b, cfg, at)
-    assert no_refs[label] is False
+    assert gates.eligible[label] is True
+    assert gates.blocking[label] == ["Brunson, Jalen（Questionable）"]      # today's status, not tomorrow's
+    assert gates.cleared[label] == [] and gates.unmatched == []
+    assert analyze.injury_gates(official, None, b, cfg, at).eligible[label] is False
+    # minutes from Eric's game-log screenshots clear a bench player (R-9.3); a name the report
+    # does not list on that team is reported, since it is usually a misspelling
+    bench = analyze.injury_gates(official, refs, b, cfg, at,
+                                 {"NYK": {"Brunson, Jalen": [14.0] * 10, "Bruson, Jalen": [36.0] * 10}})
+    assert bench.blocking[label] == []
+    assert bench.cleared[label] == ["Brunson, Jalen（Questionable，本季近 10 場平均 14.0 分鐘）"]
+    assert bench.unmatched == ["NYK Bruson, Jalen"]
 
 
 REAL = os.environ.get("BETHERO_INJURY_PDF")

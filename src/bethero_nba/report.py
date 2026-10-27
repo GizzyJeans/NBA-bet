@@ -2,8 +2,9 @@
 
 Header, a bets table of exactly seven columns with one detail line per bet,
 every game's EV by market and side (R-16.5), a no-bet table with one row per
-evaluated market, what would change each recommendation, and a transcription
-check that repeats every board line as read.
+evaluated market, what would change each recommendation (including markets
+held only by listed players, R-16.6), and a transcription check that repeats
+every board line as read.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ class ReportMeta:
     bankroll: float
     daily_cap: float
     exposure_used: float
+    key_rule: tuple[int, float] | None = None     # R-9.3: (window games, minimum average minutes)
 
 
 def _hm(moment: datetime | None) -> str:
@@ -154,6 +156,25 @@ def _explain(d: Decision) -> str:
     return CODES.get(code, "")
 
 
+def _held_lines(decisions: list[Decision], key_rule: tuple[int, float] | None) -> list[str]:
+    """R-16.6: markets that pass every other gate and are held only by listed key
+    players, one line per game, with what Eric can send to settle it."""
+    by_game: dict[str, list[Decision]] = {}
+    for d in decisions:
+        if d.codes == ["NB-STATUS"] and d.held_by:
+            by_game.setdefault(d.game.label, []).append(d)
+    lines = []
+    for ds in by_game.values():
+        players = ds[0].held_by
+        who, every = ("他", "") if len(players) == 1 else ("他們", "都")
+        bench = (f"本季近 {key_rule[0]} 場平均上場{every}不到 {key_rule[1]:g} 分鐘" if key_rule
+                 else f"{every}是替補")
+        markets = "、".join(f"{d.selection()}（EV {_pct(d.ev_worst, True)}）" for d in ds)
+        lines.append(f"- 只差傷病：{_game_label(ds[0].game)} {markets}，被 {'、'.join(players)} 擋下。"
+                     f"若{who}{bench}，傳{who}本季逐場上場時間的截圖，我重算")
+    return lines
+
+
 def render(decisions: list[Decision], meta: ReportMeta) -> str:
     board = meta.board
     bets = [d for d in decisions if d.is_bet]
@@ -169,6 +190,10 @@ def render(decisions: list[Decision], meta: ReportMeta) -> str:
     waived = [d for d in decisions if d.waivers]
     if waived:
         lines.append(f"⚠ 傷病關卡依 Eric 指示放行（{len(waived)} 個選項）；這些影子注不計入上線條件")
+    cleared = {d.game.label: (d.game, d.cleared) for d in decisions if d.cleared}
+    if cleared:
+        lines.append("替補放行（上場時間來自截圖）：" + "；".join(
+            f"{_game_label(game)} {'、'.join(players)}" for game, players in cleared.values()))
     lines += [
         "",
         "## 建議",
@@ -190,6 +215,7 @@ def render(decisions: list[Decision], meta: ReportMeta) -> str:
     for d, code in _no_bet_rows(decisions):
         lines.append(f"| {_game_label(d.game)} | {MARKET_ZH[d.market]} | {code} | {_explain(d)} |")
     lines += ["", "## 什麼會改變建議"]
+    lines += _held_lines(decisions, meta.key_rule)
     if bets:
         for d in bets:
             worse = f"平台盤口比「{d.worst_line}」更差 → 取消；" if d.worst_line else ""

@@ -30,11 +30,13 @@ $env:ODDS_API_KEY = "<your key>"      # never committed, never printed
    `analyze --injury-pdf` reads the PDF directly, and the referee screenshot's clock goes into `--referees-posted-at`. A JSON transcription (format below) is the fallback. The report may be at most `snapshots.injury_report_max_age_min` (30) minutes old at analysis time. Without a report every game stops at `NB-STATUS`.
 
    The PDFs stay out of git: they are the NBA's documents and the repository is public. The ledger records each one's SHA-256. To check what a PDF says before a pass, run `py -m bethero_nba.injuries <pdf>`.
+
+   **Minutes, only when a report asks.** A player listed Questionable or Doubtful blocks his game unless his minutes show he is not a key player (RULES R-9.3: 10 games played this season, average under 28). When a market passes every other gate and is held only by listed players, the report's 什麼會改變建議 section has a line starting 只差傷病. Eric then sends a screenshot of each named player's game log this season, from any site, with the phone clock visible and taken that US Eastern day from 6 a.m. ET on. Claude transcribes it to `data/minutes/<slate>.json` (format below), commits it, and re-runs with `--minutes`. No free source supplies minutes automatically (RULES Appendix B).
 3. **Analyze.**
    ```powershell
    py -m bethero_nba.analyze --board data\boards\2026-11-02\20261103T071000+0800.json --live --injury-pdf $env:USERPROFILE\Downloads\Injury-Report_2026-11-02_06_30PM.pdf --referees-posted-at 2026-11-03T06:50:00+08:00
    ```
-   `--live` pulls one US snapshot (6 credits with regions `us,us2`; the budget guard refuses pulls past `us_odds.max_calls_per_day` or into the reserve). Use `--odds <stored .json.gz>` to re-run on a stored snapshot. Output: the Traditional Chinese report in `reports/<slate>/`, and one hash-chained ledger row per market side in `logs/ledger.jsonl`.
+   `--live` pulls one US snapshot (6 credits with regions `us,us2`; the budget guard refuses pulls past `us_odds.max_calls_per_day` or into the reserve). Use `--odds <stored .json.gz>` to re-run on a stored snapshot, and add `--minutes data\minutes\2026-11-02.json` when there are minutes. Output: the Traditional Chinese report in `reports/<slate>/`, and one hash-chained ledger row per market side in `logs/ledger.jsonl`.
 4. **Settle** after the games, with a scores pull and, if available, a US close and Eric's last pre-tip screenshot:
    ```powershell
    py -m bethero_nba.fetch scores --live
@@ -97,17 +99,36 @@ py -m bethero_nba.validate --history data\history\games.csv --out rules\nba\VALI
   "submissions": {"BOS": "2026-11-02T12:05:00-05:00", "NYK": "2026-11-02T12:10:00-05:00"},
   "back_to_back_second": [],
   "statuses": [{"team": "NYK", "player": "Brunson, Jalen", "status": "Questionable", "reason": "Ankle"}],
-  "minutes": {"NYK": {"Brunson, Jalen": [35, 36, 34]}, "BOS": {}}
+  "minutes": {"NYK": {"Brunson, Jalen": [35, 36, 34, 33, 37, 35, 36, 34, 38, 35]}, "BOS": {}}
 }
 ```
 
 - `submissions`: when each team's game-day status first appeared. From a single PDF, this is that report's time for every team it shows as submitted.
-- `minutes` is optional (RULES R-9.3). A player listed Questionable or Doubtful blocks his game unless his recent minutes are given and show he is not a key player.
+- `minutes` is optional and works as in the minutes transcription below; `--minutes` adds to it.
+
+## Minutes transcription
+
+`data/minutes/<slate>.json`, from Eric's game-log screenshots (RULES R-9.3):
+
+```json
+{
+  "schema": "bethero-nba-minutes/1",
+  "slate_et": "2026-11-02",
+  "seen_at": "2026-11-03T07:05:00+08:00",
+  "source": "Eric's screenshot of Hart's game log, phone clock 7:05 (Taipei)",
+  "players": {"NYK": {"Hart, Josh": [12, 9, 15, 11, 0.5, 14, 10, 13, 12, 16]}}
+}
+```
+
+- Names are spelled as the injury report prints them. A name the report does not list on that team is printed as unmatched and recorded in the pass.
+- Minutes are his games played this season, oldest first; preseason and games he did not play are left out. With fewer than 10 games he still counts as key.
+- `seen_at` is when the screenshot was taken. It counts only if taken on the slate's US Eastern date at or after `injuries.minutes_screenshot_from_et` (06:00 ET) and before the pass; otherwise the pass ignores it and records `used: false`.
 
 ## Current limits
 
 - **Shadow mode** until Eric's go-live message. The proposed go-live conditions are in `VALIDATION.md` §3.
 - **Tier B** is validated for spreads and totals. A line farther than `tiers.tier_b_max_gap` from the US reference line (1.5 points for spreads, 2.0 for totals) still stops at `NB-TIER-C`.
-- **Injury report.** official.nba.com answers this cloud environment with Akamai 403, so the report has to come from Eric: the PDF downloaded in his browser, or a transcription. A PDF parser will be built once a real copy can be tested (RULES R-9.1). Without the report every market stops at `NB-STATUS`.
+- **Injury report.** official.nba.com answers this cloud environment with Akamai 403, so the report has to come from Eric: the PDF downloaded in his browser (read by `injuries.read_pdf`), or a transcription (RULES R-9.1). Without the report every market stops at `NB-STATUS`.
+- **Player minutes.** No free source supplies them: API-Sports' free plan, probed on 2026-10-27, serves three days of games and left players out of 5 of its 10 team box scores (RULES Appendix B). A listed player is cleared only by minutes from Eric's game-log screenshots.
 - **Veto model.** Evaluated in `VALIDATION.md` R6, it is a poorer forecaster than the market and stays `OFF` until Eric decides. It is not a config switch yet. `analyze` runs without a model until this season's results are collected (a scores pull at least every 3 days) and the fit is wired in, and it predicts nothing before 30 games exist. Possession-based ratings need box scores from nba.com.
 - **Cannot be backtested.** There are no historical platform lines, so the platform's edge, ROI and CLV are measured only in shadow mode (`VALIDATION.md` §2).

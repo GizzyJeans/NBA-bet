@@ -32,6 +32,10 @@ Eric's screenshot is the only platform source (RULES §1, item 7).
   - Game-day statuses count only from a report published at or after 1 p.m. local on game day (R-4.5).
 - **Referees.** The time on Eric's referee-assignments screenshot becomes `--referees-posted-at` (ISO-8601, `+08:00`). Without it every game stops at `NB-STATUS`; tell Eric.
 - **If `read_pdf` raises `ReportFormatError`.** The layout changed: stop, tell Eric, and do not hand-patch the reading. A JSON transcription (README) is the fallback.
+- **Minutes, only on request (R-9.3, R-16.6).** When the report has a 只差傷病 line, ask Eric for a screenshot of each named player's game log this season, with the phone clock visible.
+  - Transcribe his games played this season, oldest first, to `data/minutes/<slate_et>.json` (README format), with names as the injury report prints them. Commit it and re-run the pass with `--minutes`.
+  - It counts only if taken on the slate's ET date from `injuries.minutes_screenshot_from_et` on. Relay any `minutes not used` or unmatched-name line.
+  - Never fill minutes from memory or any other source; with fewer than 10 games the player stays key.
 
 ## 3. Analysis pass
 
@@ -45,7 +49,7 @@ py -m bethero_nba.analyze --board <board.json> --live --injury-pdf <pdf> --refer
   - qualifying shadow bets with EV ± σ, stake and worst acceptable line;
   - then the report's 各場 EV table, every game and both sides of each market (R-16.5; Eric 2026-10-27: 「以後每天都列出各場ev」);
   - then each no-bet with its code;
-  - then what would change the decision.
+  - then what would change the decision, including any 只差傷病 line and its screenshot request.
 
   Do not add opinions, trends or narratives (RULES §1).
 - **Commit** the ledger rows and the report.

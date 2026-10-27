@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.6.1
+  version: 0.6.2
   updated: 2026-10-27
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -390,6 +390,14 @@ injuries:
     status: UNVALIDATED
     source: "Claude 2026-10-21"
     rationale: "the current role, not the season average"
+  minutes_source:
+    value: eric_screenshots
+    status: RULE
+    source: "RULES R-9.3 and Appendix B. Listed players' minutes come from Eric's game-log screenshots, transcribed to data/minutes/<slate>.json. The free API checked 2026-10-27 (API-Sports API-NBA) serves only a three-day window, and 5 of the 10 team box scores it gave for 2026-10-26 UTC left out players"
+  minutes_screenshot_from_et:
+    value: "06:00"
+    status: RULE
+    source: "RULES R-9.3: a game-log screenshot counts for a slate only if taken that US Eastern day from this time on. The latest tip on each of Eric's boards so far is 22:05 ET (2026-10-23, 10-24 and 10-26 slates), so by 6 a.m. the previous night's games are over and in the log"
   blocking_statuses:
     value: [Questionable, Doubtful]
     status: RULE

@@ -1,5 +1,6 @@
 """End-to-end: analyze writes ledger rows and a report; settle settles them. No network."""
 
+import hashlib
 import json
 import shutil
 from datetime import date, datetime, timezone
@@ -127,3 +128,36 @@ def test_analyze_reads_the_official_report_pdf(repo, monkeypatch):
                                            "referees_posted_at": "2026-11-02T09:05:00-05:00"}
     bets = [r for r in records if r.get("record_type") == "decision" and not r["codes"] and r["stake"]]
     assert len(bets) == 1 and bets[0]["market"] == "moneyline"     # an Out player blocks nothing
+
+
+def test_minutes_screenshots_clear_a_bench_player(repo, monkeypatch):
+    tmp, board_path, snapshot = repo
+    official = injury_report.Report(datetime(2026, 11, 2, 18, 0, tzinfo=injury_report.EASTERN), (
+        injury_report.ReportEntry(date(2026, 11, 2), "NYK", "BOS", "NYK", "Brunson, Jalen", "Questionable",
+                                  "Ankle"),), sha256="cd" * 32)
+    monkeypatch.setattr(injury_report, "read_pdf", lambda path: official)
+    pdf = tmp / "Injury-Report_2026-11-02_06_00PM.pdf"
+    pdf.write_bytes(b"%PDF-1.4 test")
+    minutes = tmp / "data" / "minutes" / "2026-11-02.json"
+    minutes.parent.mkdir(parents=True)
+
+    def run(seen_at):
+        minutes.write_text(json.dumps({"schema": "bethero-nba-minutes/1", "slate_et": "2026-11-02",
+                                       "seen_at": seen_at, "source": "test",
+                                       "players": {"NYK": {"Brunson, Jalen": [12] * 10}}}), encoding="utf-8")
+        assert analyze.main(["--root", str(tmp), "--board", str(board_path), "--odds", str(snapshot),
+                             "--injury-pdf", str(pdf), "--referees-posted-at", "2026-11-02T09:05:00-05:00",
+                             "--minutes", str(minutes), "--now", ANALYSIS_TS.isoformat()]) == 0
+        records = ledger.verify(tmp / "logs" / "ledger.jsonl")
+        text = next((tmp / "reports" / "2026-11-02").glob("*.md")).read_text(encoding="utf-8")
+        return records[-7], [r for r in records[-6:] if not r["codes"] and r["stake"]], text
+
+    # taken before 6 a.m. ET on the slate day: not used, so the Questionable player holds every market
+    stale, bets, text = run("2026-11-02T05:00:00-05:00")
+    assert stale["minutes_source"]["used"] is False and bets == []
+    assert "- 只差傷病：尼克@塞爾提克 塞爾提克 獨贏" in text
+    fresh, bets, text = run("2026-11-02T18:05:00-05:00")
+    assert fresh["minutes_source"]["used"] is True and fresh["minutes_source"]["unmatched"] == []
+    assert fresh["minutes_source"]["sha256"] == hashlib.sha256(minutes.read_bytes()).hexdigest()
+    assert len(bets) == 1 and bets[0]["cleared"] == ["Brunson, Jalen（Questionable，本季近 10 場平均 12.0 分鐘）"]
+    assert "替補放行（上場時間來自截圖）：尼克@塞爾提克 Brunson, Jalen" in text
