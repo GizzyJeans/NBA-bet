@@ -1,0 +1,94 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-10-27",
+  "platform_ts": "2026-10-28T06:02:00+08:00",
+  "ts_source": "screenshot_clock",
+  "source": "Eric's platform screenshot, phone clock 6:02 (Taipei), header NBA 美國職業籃球(4); the platform prints SAN for SAS",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-10-28T07:35:00+08:00",
+      "home": "BOS",
+      "away": "BKN",
+      "handicap": {
+        "text": "13+75",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大222.5",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-10-28T08:05:00+08:00",
+      "home": "NYK",
+      "away": "DET",
+      "handicap": {
+        "text": "4+25",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大220+50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 0.57,
+        "price_away": 1.43
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-10-28T08:05:00+08:00",
+      "home": "SAS",
+      "away": "SAC",
+      "handicap": {
+        "text": "19+75",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大232.5",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-10-28T11:05:00+08:00",
+      "home": "LAL",
+      "away": "POR",
+      "handicap": {
+        "text": "2平",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大233.5",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 0.8,
+        "price_away": 1.01
+      },
+      "unresolved": []
+    }
+  ]
+}
