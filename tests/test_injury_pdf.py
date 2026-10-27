@@ -133,6 +133,24 @@ def test_injury_gates_from_the_official_report(cfg):
     assert bench.unmatched == ["NYK Bruson, Jalen"]
 
 
+def test_referee_time_rule(cfg):
+    b = board()                                       # slate 2026-11-02, after US DST ends
+    rule = datetime(2026, 11, 2, 10, 0, tzinfo=EASTERN)
+    assert injuries.referees_posted_by_rule(date(2026, 11, 2), cfg) == rule
+    assert injuries.referees_posted_by_rule(date(2026, 10, 26), cfg).utcoffset().total_seconds() == -4 * 3600
+    assert analyze.referees_posted(None, b, cfg) == (rule, {"referees_posted_at": rule.isoformat(),
+                                                             "referees_evidence": "time_rule"})
+    early = datetime(2026, 11, 2, 9, 5, tzinfo=EASTERN)
+    assert analyze.referees_posted(early, b, cfg)[1]["referees_evidence"] == "screenshot"
+    late = datetime(2026, 11, 2, 18, 0, tzinfo=EASTERN)                 # a later screenshot never delays it
+    assert analyze.referees_posted(late, b, cfg)[0] == rule
+    game = b.games[0]
+    filed = {"NYK": datetime(2026, 11, 2, 13, 0, tzinfo=EASTERN), "BOS": datetime(2026, 11, 2, 13, 0, tzinfo=EASTERN)}
+    teams = (game.home.tricode, game.away.tricode)
+    assert injuries.final_eligible(game.tip, teams, filed, rule, datetime(2026, 11, 2, 18, 40, tzinfo=EASTERN))
+    assert not injuries.final_eligible(game.tip, teams, filed, rule, datetime(2026, 11, 2, 9, 59, tzinfo=EASTERN))
+
+
 REAL = os.environ.get("BETHERO_INJURY_PDF")
 
 

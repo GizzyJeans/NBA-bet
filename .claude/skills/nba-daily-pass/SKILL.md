@@ -30,7 +30,7 @@ Eric's screenshot is the only platform source (RULES §1, item 7).
   - Check it first with `python -m bethero_nba.injuries <pdf>`.
   - It must be at most `snapshots.injury_report_max_age_min` old at analysis time.
   - Game-day statuses count only from a report published at or after 1 p.m. local on game day (R-4.5).
-- **Referees.** The time on Eric's referee-assignments screenshot becomes `--referees-posted-at` (ISO-8601, `+08:00`). Without it every game stops at `NB-STATUS`; tell Eric.
+- **Referees.** Assignments count as posted from `snapshots.referee_assignments_posted_by_et` (10:00 ET) on game day (R-4.5; Eric 2026-10-27), so no screenshot is needed. Only if Eric sends a referee-assignments screenshot showing an earlier time, pass its clock as `--referees-posted-at` (ISO-8601, `+08:00`).
 - **If `read_pdf` raises `ReportFormatError`.** The layout changed: stop, tell Eric, and do not hand-patch the reading. A JSON transcription (README) is the fallback.
 - **Minutes (R-9.3).** With an injury source, `analyze --live` downloads ESPN's box scores (sportsdataverse) when a listed player needs minutes, and checks every game first.
   - Relay any `box scores not used` or `no box-score minutes for` line, and the report's 只差傷病 lines.
@@ -41,7 +41,7 @@ Eric's screenshot is the only platform source (RULES §1, item 7).
 ## 3. Analysis pass
 
 ```powershell
-py -m bethero_nba.analyze --board <board.json> --live --injury-pdf <pdf> --referees-posted-at <ISO time>
+py -m bethero_nba.analyze --board <board.json> --live --injury-pdf <pdf>
 ```
 
 - **`--live` costs 6 credits.** The budget guard allows `us_odds.max_calls_per_day` odds pulls per UTC day and keeps a reserve. If it refuses, report that; never bypass it.

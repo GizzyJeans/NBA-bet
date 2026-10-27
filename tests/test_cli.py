@@ -125,7 +125,8 @@ def test_analyze_reads_the_official_report_pdf(repo, monkeypatch):
     assert code == 0 and seen == [pdf]
     records = ledger.verify(tmp / "logs" / "ledger.jsonl")
     assert records[0]["injury_source"] == {"kind": "official_pdf", "file": pdf.name, "sha256": "ab" * 32,
-                                           "referees_posted_at": "2026-11-02T09:05:00-05:00"}
+                                           "referees_posted_at": "2026-11-02T09:05:00-05:00",
+                                           "referees_evidence": "screenshot"}
     bets = [r for r in records if r.get("record_type") == "decision" and not r["codes"] and r["stake"]]
     assert len(bets) == 1 and bets[0]["market"] == "moneyline"     # an Out player blocks nothing
 
@@ -214,3 +215,20 @@ def test_box_scores_clear_a_bench_player(repo, monkeypatch):
     bench, bets, text = run(12)
     assert len(bets) == 1 and bets[0]["cleared"] == ["Brunson, Jalen（Questionable，本季近 10 場平均 12.0 分鐘）"]
     assert bench["minutes_source"]["not_supplied"] == {} and "替補放行：尼克@塞爾提克 Brunson, Jalen" in text
+
+
+def test_referees_count_as_posted_from_ten_eastern_without_a_screenshot(repo, monkeypatch):
+    tmp, board_path, snapshot = repo
+    official = injury_report.Report(datetime(2026, 11, 2, 18, 0, tzinfo=injury_report.EASTERN), (
+        injury_report.ReportEntry(date(2026, 11, 2), "NYK", "BOS", "NYK", "Hart, Josh", "Out", "Knee"),),
+        sha256="12" * 32)                      # the game's block exists, so both teams count as filed
+    monkeypatch.setattr(injury_report, "read_pdf", lambda path: official)
+    pdf = tmp / "Injury-Report_2026-11-02_06_00PM.pdf"
+    pdf.write_bytes(b"%PDF-1.4 test")
+    assert analyze.main(["--root", str(tmp), "--board", str(board_path), "--odds", str(snapshot),
+                         "--injury-pdf", str(pdf), "--now", ANALYSIS_TS.isoformat()]) == 0
+    records = ledger.verify(tmp / "logs" / "ledger.jsonl")
+    assert records[0]["injury_source"]["referees_posted_at"] == "2026-11-02T10:00:00-05:00"
+    assert records[0]["injury_source"]["referees_evidence"] == "time_rule"
+    bets = [r for r in records if r.get("record_type") == "decision" and not r["codes"] and r["stake"]]
+    assert len(bets) == 1 and bets[0]["market"] == "moneyline"

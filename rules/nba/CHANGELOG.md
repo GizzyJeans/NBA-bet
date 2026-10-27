@@ -2,6 +2,20 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.4 · 2026-10-27
+
+- R-4.5(b): referee assignments count as posted from `snapshots.referee_assignments_posted_by_et` = "10:00" ET on the game date (new, CONFIRMED). Eric 2026-10-27 chose 「B 改用時間規則 (建議)」 over keeping the daily screenshot.
+  - Why: he asked whether Claude could fetch the assignments. No compliant automatic source exists:
+    - official.nba.com refuses this environment, and nothing fetches NBA hosts;
+    - the sportsdataverse officials file lists completed games only (52 games; none of that day's 4 at 14:17 ET).
+
+    The NBA posts assignments about 9:00 a.m. ET (Appendix A).
+  - The daily referee screenshot is no longer needed. One that shows an earlier posting still counts (`--referees-posted-at`); a later one never delays it. The pass records `referees_posted_at` and `referees_evidence` (`time_rule` or `screenshot`).
+  - Risk Eric accepted: if the NBA posts late, a pass after 10:00 ET counts the assignments as posted before they are.
+- Consequence for bets: past passes are not re-run, and their ledger rows keep the screenshot times.
+  - For evening games, the game-day injury report (1 p.m. local) comes later than 10:00 ET, so the rule rarely decides anything.
+  - For afternoon tips, a pass before 10:00 ET is now PRELIMINARY even when assignments were up at 9:00, unless a screenshot shows them.
+
 ## 0.6.3 · 2026-10-27
 
 - R-9.3: listed players' minutes now come automatically from ESPN's box scores as sportsdataverse publishes them (`injuries.minutes_source`, RULE, value changed). Eric 2026-10-27 asked 「沒有其他的方法查上場時間嗎?」.

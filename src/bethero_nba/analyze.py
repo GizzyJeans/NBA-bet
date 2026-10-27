@@ -5,7 +5,8 @@
 
 `--live` pulls a fresh US snapshot (RULES R-4.7, budget R-5.8); `--odds` re-uses
 a stored one. `--injury-pdf` takes the official injury report as Eric saved it,
-with `--referees-posted-at` from his referee-assignments screenshot;
+and referee assignments count as posted from 10:00 ET on game day (R-4.5;
+`--referees-posted-at` from a screenshot can show an earlier time);
 `--injuries` takes a JSON transcription instead (format in README). Without
 either, every game stops at NB-STATUS, which is the rule (R-9.2), not a bug.
 With an injury source, listed players' minutes come from the ESPN box scores
@@ -50,6 +51,16 @@ class InjuryGates:
     unmatched: list[str]               # transcribed minutes for a player the report does not list on that team
     not_supplied: dict[str, str]       # why the box scores could not supply a player's minutes
     box_scores: dict | None            # the files used, or why none were; None if no listed player needed them
+    referees: dict | None = None       # when referee assignments counted as posted, and on what evidence
+
+
+def referees_posted(seen: datetime | None, board, cfg) -> tuple[datetime, dict]:
+    """R-4.5(b): assignments count as posted from the time rule (Eric 2026-10-27), or earlier when a
+    screenshot of official.nba.com shows them."""
+    rule = injuries.referees_posted_by_rule(board.slate_et, cfg)
+    posted = min(seen, rule) if seen else rule
+    return posted, {"referees_posted_at": posted.isoformat(),
+                    "referees_evidence": "screenshot" if seen and seen < rule else "time_rule"}
 
 
 def _by_game(timeline: injuries.Timeline, board, cfg, at: datetime, minutes: dict | None,
@@ -89,7 +100,8 @@ def load_injuries(path: Path, board, cfg, at: datetime, minutes: dict | None = N
     """G7 inputs and the report time from a transcription; `minutes` adds to the transcription's own."""
     data = json.loads(path.read_text(encoding="utf-8"))
     report_time = datetime.fromisoformat(data["report_time"])
-    refs = datetime.fromisoformat(data["referees_posted_at"]) if data.get("referees_posted_at") else None
+    refs, referees = referees_posted(datetime.fromisoformat(data["referees_posted_at"])
+                                     if data.get("referees_posted_at") else None, board, cfg)
     submissions = {t: datetime.fromisoformat(v) for t, v in data.get("submissions", {}).items()}
     records = [injuries.StatusRecord(report_time, s["team"], s["player"], s["status"], s.get("reason", ""))
                for s in data.get("statuses", [])]
@@ -101,7 +113,8 @@ def load_injuries(path: Path, board, cfg, at: datetime, minutes: dict | None = N
     b2b = set(data.get("back_to_back_second", []))
     eligible = {game.label: injuries.final_eligible(game.tip, (game.home.tricode, game.away.tricode),
                                                     submissions, refs, at, b2b) for game in board.games}
-    return InjuryGates(eligible, **_by_game(timeline, board, cfg, at, combined, box_scores)), report_time
+    return (InjuryGates(eligible, **_by_game(timeline, board, cfg, at, combined, box_scores), referees=referees),
+            report_time)
 
 
 def injury_gates(report_: injuries.Report, referees_posted_at: datetime | None, board, cfg,
@@ -130,7 +143,8 @@ def main(argv: list[str] | None = None) -> int:
     injury.add_argument("--injury-pdf", type=Path, help="official injury report PDF, as saved from official.nba.com")
     injury.add_argument("--injuries", type=Path, help="injury-report transcription (JSON)")
     parser.add_argument("--referees-posted-at",
-                        help="when the day's referee assignments were seen posted (ISO-8601), with --injury-pdf")
+                        help="when a screenshot showed the day's referee assignments posted (ISO-8601), "
+                             "if before the 10:00 ET time rule")
     parser.add_argument("--minutes", type=Path,
                         help="listed players' minutes from Eric's game-log screenshots (JSON, format in README)")
     parser.add_argument("--box-scores", nargs=2, type=Path, metavar=("BOX", "SCHEDULE"),
@@ -189,14 +203,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.injuries:
         gates, report_ts = load_injuries(args.injuries, board, cfg, now, minutes, box_scores)
         injury_source = {"kind": "transcription", "file": args.injuries.as_posix(),
-                         "sha256": hashlib.sha256(args.injuries.read_bytes()).hexdigest()}
+                         "sha256": hashlib.sha256(args.injuries.read_bytes()).hexdigest(), **gates.referees}
     elif args.injury_pdf:
         official = injuries.read_pdf(args.injury_pdf)
-        refs = datetime.fromisoformat(args.referees_posted_at) if args.referees_posted_at else None
+        refs, referees = referees_posted(datetime.fromisoformat(args.referees_posted_at)
+                                         if args.referees_posted_at else None, board, cfg)
         gates = injury_gates(official, refs, board, cfg, now, minutes, box_scores)
+        gates.referees = referees
         report_ts = official.report_time
         injury_source = {"kind": "official_pdf", "file": args.injury_pdf.name, "sha256": official.sha256,
-                         "referees_posted_at": refs.isoformat() if refs else None}
+                         **referees}
     if transcription is not None:
         transcription["unmatched"] = gates.unmatched if minutes else []
         if transcription["unmatched"]:

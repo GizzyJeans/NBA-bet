@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.6.3
+  version: 0.6.4
   updated: 2026-10-27
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -277,7 +277,11 @@ snapshots:
   require_referee_assignments:
     value: true
     status: CONFIRMED
-    source: "brief 1.6; RULES R-4.5. Eric 2026-10-23 chose 「A 每天傳截圖」 over assuming assignments are posted after 10 a.m. ET: the evidence is his daily screenshot of official.nba.com/referee-assignments, whose clock becomes --referees-posted-at"
+    source: "brief 1.6; RULES R-4.5. Evidence: snapshots.referee_assignments_posted_by_et (Eric 2026-10-27), or an earlier time shown on Eric's screenshot of official.nba.com/referee-assignments (--referees-posted-at). From 2026-10-23 to 10-27 the screenshot was required (Eric 2026-10-23: 「A 每天傳截圖」)"
+  referee_assignments_posted_by_et:
+    value: "10:00"
+    status: CONFIRMED
+    source: "Eric 2026-10-27 chose 「B 改用時間規則 (建議)」: a slate's referee assignments count as posted from this time (US Eastern) on its game date, without a screenshot. official.nba.com posts them about 9:00 a.m. ET (RULES Appendix A). This environment cannot reach that page, and the sportsdataverse officials file lists completed games only (checked 2026-10-27 14:17 ET: 52 games, none of that day's 4)"
 
 tiers:
   tier_a_min_books:

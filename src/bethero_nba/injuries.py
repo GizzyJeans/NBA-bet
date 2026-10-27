@@ -379,6 +379,13 @@ def report_date_et(moment: datetime) -> date:
     return moment.astimezone(EASTERN).date()
 
 
+def referees_posted_by_rule(slate_et: date, cfg) -> datetime:
+    """When R-4.5 counts a slate's referee assignments as posted without a screenshot:
+    cfg:snapshots.referee_assignments_posted_by_et on its US Eastern date (Eric 2026-10-27)."""
+    return datetime.combine(slate_et, time.fromisoformat(cfg.get("snapshots.referee_assignments_posted_by_et")),
+                            EASTERN)
+
+
 # -------------------------------------------------------------------- minutes
 
 
