@@ -61,4 +61,18 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
 - **Wrong:** recommended API-Sports API-NBA as the free minutes source for R-9.3 and estimated 5–15 requests a day, one per listed player. It relied on a getting-started guide's summary ("100 requests a day, all endpoints") and did not establish the free plan's season and date limits.
 - **Correct:** the free plan refuses 2026 season queries (it offers seasons 2022–2024) and any date outside a three-day UTC window, so per-player queries are impossible. And 5 of the 10 team box scores it served for 2026-10-26 UTC left out players. It cannot supply a 10-game average.
 - **Impact:** none on any number, gate or stake; no pass read its data, and the reply had said it would be checked before use. Eric opened three domains and registered a key for a source that is not used.
-- **Fix:** checked with 11 requests before any use and not adopted (RULES 0.6.2, Appendix B). Minutes now come from Eric's game-log screenshots (R-9.3).
+- **Fix:** checked with 11 requests before any use and not adopted (RULES 0.6.2, Appendix B). Minutes then came from Eric's game-log screenshots; since 0.6.3 they come from ESPN's box scores via sportsdataverse (R-9.3).
+
+## E-009 · 2026-10-27 · Reply and RULES 0.6.2: "a screenshot from any site"
+
+- **Wrong:** the reply told Eric a game-log screenshot from any site would do, and R-9.3 and the README said "on any site he browses".
+- **Correct:** Sports Reference's terms (clause 5, quoted on its Data Use page, read 2026-10-27) forbid using its content for prompting or instructing AI models, including generating statistics. This project runs through Claude, so Basketball-Reference screenshots are excluded.
+- **Impact:** none; no screenshot was sent.
+- **Fix:** RULES 0.6.3 R-9.3, the README, the daily-pass skill and the report's request exclude Sports Reference sites.
+
+## E-010 · 2026-10-27 · RULES 0.6.2 Appendix B and the reply on API-Sports
+
+- **Wrong:** said one team's minutes in API-Sports' 2026-10-26 data, 266, exceeded a 240-minute game.
+- **Correct:** that game, MIN@CLE, went to overtime (ESPN schedule: 5 periods), so 265 is right; API-Sports' period count of 4 was what was wrong.
+- **Impact:** one of the reasons given against API-Sports was misstated. The conclusion stands on its three-day window and the 5 team box scores missing players. No number, gate or stake changed.
+- **Fix:** Appendix B corrected in RULES 0.6.3.

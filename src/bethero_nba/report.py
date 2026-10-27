@@ -39,6 +39,7 @@ class ReportMeta:
     daily_cap: float
     exposure_used: float
     key_rule: tuple[int, float] | None = None     # R-9.3: (window games, minimum average minutes)
+    minutes_credit: str | None = None             # where listed players' minutes came from (CC BY credit)
 
 
 def _hm(moment: datetime | None) -> str:
@@ -165,13 +166,18 @@ def _held_lines(decisions: list[Decision], key_rule: tuple[int, float] | None) -
             by_game.setdefault(d.game.label, []).append(d)
     lines = []
     for ds in by_game.values():
-        players = ds[0].held_by
-        who, every = ("他", "") if len(players) == 1 else ("他們", "都")
-        bench = (f"本季近 {key_rule[0]} 場平均上場{every}不到 {key_rule[1]:g} 分鐘" if key_rule
-                 else f"{every}是替補")
+        players, unsupplied = ds[0].held_by, ds[0].held_unsupplied
         markets = "、".join(f"{d.selection()}（EV {_pct(d.ev_worst, True)}）" for d in ds)
-        lines.append(f"- 只差傷病：{_game_label(ds[0].game)} {markets}，被 {'、'.join(players)} 擋下。"
-                     f"若{who}{bench}，傳{who}本季逐場上場時間的截圖，我重算")
+        line = f"- 只差傷病：{_game_label(ds[0].game)} {markets}，被 {'、'.join(players)} 擋下。"
+        if unsupplied and len(unsupplied) == len(players):      # no blocker's minutes are known
+            who, every = ("他", "") if len(players) == 1 else ("他們", "都")
+            bench = (f"本季近 {key_rule[0]} 場平均上場{every}不到 {key_rule[1]:g} 分鐘" if key_rule
+                     else f"{every}是替補")
+            line += (f"沒有{who}的上場時間資料；若{who}{bench}，傳{who}本季逐場上場時間的截圖"
+                     f"（Basketball-Reference 除外），我重算")
+        else:
+            line += f"依 R-9.3 {'他' if len(players) == 1 else '他們'}目前算關鍵球員，傷病狀態更新才會放行"
+        lines.append(line)
     return lines
 
 
@@ -192,7 +198,7 @@ def render(decisions: list[Decision], meta: ReportMeta) -> str:
         lines.append(f"⚠ 傷病關卡依 Eric 指示放行（{len(waived)} 個選項）；這些影子注不計入上線條件")
     cleared = {d.game.label: (d.game, d.cleared) for d in decisions if d.cleared}
     if cleared:
-        lines.append("替補放行（上場時間來自截圖）：" + "；".join(
+        lines.append("替補放行：" + "；".join(
             f"{_game_label(game)} {'、'.join(players)}" for game, players in cleared.values()))
     lines += [
         "",
@@ -238,4 +244,6 @@ def render(decisions: list[Decision], meta: ReportMeta) -> str:
             f" / {h.prices['home'] if h.prices['home'] is not None else '-'}｜大小 "
             f"{t.line.raw.lstrip('大小') if t.line else '-'} / {t.prices['over'] if t.prices['over'] is not None else '-'}"
             f"｜獨贏 {ml_text}")
+    if meta.minutes_credit:
+        lines += ["", f"上場時間：{meta.minutes_credit}"]
     return "\n".join(lines) + "\n"

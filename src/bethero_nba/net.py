@@ -6,9 +6,9 @@ sets; tests never pass it. Requests to one host are spaced at least
 `min_interval_s` apart and identify the client by its repository URL rather
 than a personal email.
 
-Every response body is stored gzipped next to a metadata file holding the
-URL, retrieval time and SHA-256, so any number derived from it can be traced
-and re-run offline. Secret query parameters (the Odds API key) are redacted
+Every response body is stored gzipped (`.json.gz`, or `.csv.gz` for a CSV
+file) next to a metadata file holding the URL, retrieval time and SHA-256, so
+any number derived from it can be traced and re-run offline. Secret query parameters (the Odds API key) are redacted
 before anything is written.
 """
 
@@ -49,6 +49,17 @@ class Fetched:
 
     def json(self):
         return json.loads(self.body.decode("utf-8"))
+
+    def text(self) -> str:
+        return self.body.decode("utf-8")
+
+
+def meta_path(body_path: Path) -> Path:
+    """The metadata file stored next to a response body."""
+    for suffix in (".json.gz", ".csv.gz"):
+        if body_path.name.endswith(suffix):
+            return body_path.with_name(body_path.name[: -len(suffix)] + ".meta.json")
+    raise FetchError(f"{body_path}: not a stored response")
 
 
 def redact(url: str, secrets: tuple[str, ...] = SECRET_PARAMS) -> str:
@@ -110,7 +121,8 @@ class HttpClient:
         folder = self.cache_dir / host
         folder.mkdir(parents=True, exist_ok=True)
         stem = f"{fetched.retrieved_at:%Y%m%dT%H%M%SZ}_{fetched.sha256[:12]}"
-        body_path = folder / f"{stem}.json.gz"
+        suffix = ".csv.gz" if urllib.parse.urlsplit(fetched.url).path.endswith(".csv") else ".json.gz"
+        body_path = folder / f"{stem}{suffix}"
         with gzip.GzipFile(body_path, "wb", mtime=0) as fh:
             fh.write(fetched.body)
         meta = {
@@ -122,7 +134,7 @@ class HttpClient:
             "headers": {k: v for k, v in fetched.headers.items()
                         if k.startswith("x-requests") or k == "content-type"},
         }
-        (folder / f"{stem}.meta.json").write_text(
+        meta_path(body_path).write_text(
             json.dumps(meta, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
         return Fetched(fetched.body, fetched.status, fetched.headers, fetched.url,
                        fetched.retrieved_at, fetched.sha256, body_path)
@@ -131,8 +143,7 @@ class HttpClient:
 def load_cached(body_path: Path | str) -> Fetched:
     """Re-open a stored response; the hash is checked so an edited file is caught."""
     body_path = Path(body_path)
-    meta_path = body_path.with_name(body_path.name.replace(".json.gz", ".meta.json"))
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta = json.loads(meta_path(body_path).read_text(encoding="utf-8"))
     with gzip.open(body_path, "rb") as fh:
         body = fh.read()
     digest = hashlib.sha256(body).hexdigest()

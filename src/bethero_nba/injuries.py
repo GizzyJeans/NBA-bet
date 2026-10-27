@@ -291,34 +291,50 @@ def key_players(minutes: dict[str, list[float]], cfg) -> set[str]:
     return {p for p, mins in minutes.items() if len(mins) < window or sum(mins[-window:]) / window >= threshold}
 
 
+def _listed(timeline: Timeline, tricodes: tuple[str, ...], cfg, at: datetime):
+    """(team, player, status) for players currently listed with a blocking status. Reasons in
+    injuries.nonblocking_reasons (a two-way player's G League assignment, Eric 2026-10-23) never block."""
+    statuses = set(cfg.get("injuries.blocking_statuses"))
+    exempt = set(cfg.get("injuries.nonblocking_reasons"))
+    for tricode in tricodes:
+        for player in sorted(timeline.players(tricode)):
+            record = timeline.status_at(tricode, player, at)
+            if record is not None and record.status in statuses and record.reason.strip() not in exempt:
+                yield tricode, player, record.status
+
+
+def listed(timeline: Timeline, tricodes: tuple[str, ...], cfg, at: datetime) -> dict[str, set[str]]:
+    """Players currently listed with a blocking status, by team: the ones whose minutes R-9.3 needs."""
+    found: dict[str, set[str]] = {}
+    for tricode, player, _ in _listed(timeline, tricodes, cfg, at):
+        found.setdefault(tricode, set()).add(player)
+    return found
+
+
 def listed_players(timeline: Timeline, tricodes: tuple[str, str],
                    minutes: dict[str, dict[str, list[float]]] | None, cfg,
-                   at: datetime) -> tuple[list[str], list[str]]:
-    """(blocking, cleared) among the players currently listed with a blocking status.
+                   at: datetime) -> tuple[list[str], list[str], list[str]]:
+    """(blocking, cleared, unsupplied) among the players currently listed with a blocking status.
 
     A listed player blocks when he is key (RULES R-9.3). One whose recent
     minutes are not supplied counts as key: missing data can only block. So
-    minutes are needed only to clear a bench player, and a cleared player
-    carries his average so the report can show it. Reasons in
-    injuries.nonblocking_reasons (a two-way player's G League assignment,
-    Eric 2026-10-23) never block."""
-    statuses = set(cfg.get("injuries.blocking_statuses"))
-    exempt = set(cfg.get("injuries.nonblocking_reasons"))
+    minutes are needed only to clear a bench player. Blocking and cleared
+    players carry what their minutes showed, so the report can show it;
+    `unsupplied` names the blocking players whose minutes were not supplied."""
     window = cfg.get("injuries.key_player_window_games")
-    blocking, cleared = [], []
-    for tricode in tricodes:
+    blocking, cleared, unsupplied = [], [], []
+    for tricode, player, status in _listed(timeline, tricodes, cfg, at):
         known = (minutes or {}).get(tricode, {})
-        keys = key_players(known, cfg)
-        for player in sorted(timeline.players(tricode)):
-            record = timeline.status_at(tricode, player, at)
-            if record is None or record.status not in statuses or record.reason.strip() in exempt:
-                continue
-            if player not in known or player in keys:
-                blocking.append(f"{player}（{record.status}）")
-            else:
-                average = sum(known[player][-window:]) / window
-                cleared.append(f"{player}（{record.status}，本季近 {window} 場平均 {average:.1f} 分鐘）")
-    return blocking, cleared
+        if player not in known:
+            blocking.append(f"{player}（{status}）")
+            unsupplied.append(player)
+        elif len(known[player]) < window:
+            blocking.append(f"{player}（{status}，本季出賽 {len(known[player])} 場）")
+        else:
+            average = sum(known[player][-window:]) / window
+            text = f"{player}（{status}，本季近 {window} 場平均 {average:.1f} 分鐘）"
+            (blocking if player in key_players({player: known[player]}, cfg) else cleared).append(text)
+    return blocking, cleared, unsupplied
 
 
 def blocking_players(timeline: Timeline, tricodes: tuple[str, str],

@@ -7,9 +7,9 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from bethero_nba import analyze, ledger, net, settle
+from bethero_nba import analyze, boxscores, ledger, net, settle
 from bethero_nba import injuries as injury_report
-from tests.helpers import ANALYSIS_TS, HOME, AWAY, TIP, US_TS, us_game
+from tests.helpers import ANALYSIS_TS, HOME, AWAY, TIP, US_TS, box_season, us_game
 
 
 class FakeOpener:
@@ -154,10 +154,63 @@ def test_minutes_screenshots_clear_a_bench_player(repo, monkeypatch):
 
     # taken before 6 a.m. ET on the slate day: not used, so the Questionable player holds every market
     stale, bets, text = run("2026-11-02T05:00:00-05:00")
-    assert stale["minutes_source"]["used"] is False and bets == []
+    assert stale["minutes_source"]["transcription"]["used"] is False and bets == []
+    assert stale["minutes_source"]["box_scores"] is None                   # neither --live nor --box-scores
     assert "- 只差傷病：尼克@塞爾提克 塞爾提克 獨贏" in text
     fresh, bets, text = run("2026-11-02T18:05:00-05:00")
-    assert fresh["minutes_source"]["used"] is True and fresh["minutes_source"]["unmatched"] == []
-    assert fresh["minutes_source"]["sha256"] == hashlib.sha256(minutes.read_bytes()).hexdigest()
+    used = fresh["minutes_source"]["transcription"]
+    assert used["used"] is True and used["unmatched"] == []
+    assert used["sha256"] == hashlib.sha256(minutes.read_bytes()).hexdigest()
     assert len(bets) == 1 and bets[0]["cleared"] == ["Brunson, Jalen（Questionable，本季近 10 場平均 12.0 分鐘）"]
-    assert "替補放行（上場時間來自截圖）：尼克@塞爾提克 Brunson, Jalen" in text
+    assert "替補放行：尼克@塞爾提克 Brunson, Jalen" in text and text.rstrip().endswith("上場時間：Eric 的出賽紀錄截圖")
+
+
+def store_csv(root, url, text, when):
+    def opener(request, timeout):
+        class R:
+            status, headers = 200, {"Content-Type": "application/octet-stream"}
+
+            def read(self):
+                return text.encode("utf-8")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+        return R()
+    client = net.HttpClient(root / "data" / "raw", live=True, user_agent="t", min_interval_s=0,
+                            opener=opener, now=lambda: when)
+    return client.get(url).path
+
+
+def test_box_scores_clear_a_bench_player(repo, monkeypatch):
+    tmp, board_path, snapshot = repo
+    official = injury_report.Report(datetime(2026, 11, 2, 18, 0, tzinfo=injury_report.EASTERN), (
+        injury_report.ReportEntry(date(2026, 11, 2), "NYK", "BOS", "NYK", "Brunson, Jalen", "Questionable",
+                                  "Ankle"),), sha256="ef" * 32)
+    monkeypatch.setattr(injury_report, "read_pdf", lambda path: official)
+    pdf = tmp / "Injury-Report_2026-11-02_06_00PM.pdf"
+    pdf.write_bytes(b"%PDF-1.4 test")
+    when = datetime(2026, 11, 2, 22, 0, tzinfo=timezone.utc)
+
+    def run(brunson):
+        box, schedule = box_season(games=12, brunson=brunson)
+        files = [store_csv(tmp, boxscores.PLAYER_BOX.format(season=2027), box, when),
+                 store_csv(tmp, boxscores.SCHEDULE.format(season=2027), schedule, when)]
+        assert analyze.main(["--root", str(tmp), "--board", str(board_path), "--odds", str(snapshot),
+                             "--injury-pdf", str(pdf), "--referees-posted-at", "2026-11-02T09:05:00-05:00",
+                             "--box-scores", *map(str, files), "--now", ANALYSIS_TS.isoformat()]) == 0
+        records = ledger.verify(tmp / "logs" / "ledger.jsonl")
+        text = next((tmp / "reports" / "2026-11-02").glob("*.md")).read_text(encoding="utf-8")
+        return records[-7], [r for r in records[-6:] if not r["codes"] and r["stake"]], text
+
+    starter, bets, text = run(35)
+    assert bets == [] and "Brunson, Jalen（Questionable，本季近 10 場平均 35.0 分鐘）" in text
+    assert "依 R-9.3 他目前算關鍵球員" in text and text.rstrip().endswith(boxscores.CREDIT)
+    files = starter["minutes_source"]["box_scores"]["files"]
+    assert [f["url"] for f in files] == [boxscores.PLAYER_BOX.format(season=2027),
+                                         boxscores.SCHEDULE.format(season=2027)]
+    bench, bets, text = run(12)
+    assert len(bets) == 1 and bets[0]["cleared"] == ["Brunson, Jalen（Questionable，本季近 10 場平均 12.0 分鐘）"]
+    assert bench["minutes_source"]["not_supplied"] == {} and "替補放行：尼克@塞爾提克 Brunson, Jalen" in text

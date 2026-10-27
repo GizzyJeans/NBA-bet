@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.6.2
+  version: 0.6.3
   updated: 2026-10-27
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -391,9 +391,17 @@ injuries:
     source: "Claude 2026-10-21"
     rationale: "the current role, not the season average"
   minutes_source:
-    value: eric_screenshots
+    value: espn_box_scores_via_sportsdataverse
     status: RULE
-    source: "RULES R-9.3 and Appendix B. Listed players' minutes come from Eric's game-log screenshots, transcribed to data/minutes/<slate>.json. The free API checked 2026-10-27 (API-Sports API-NBA) serves only a three-day window, and 5 of the 10 team box scores it gave for 2026-10-26 UTC left out players"
+    source: "RULES R-9.3 and Appendix B: sportsdataverse hoopR-nba-data, CC BY 4.0, ESPN's player box scores and schedule, one file per season on GitHub, refreshed daily in season. Checked 2026-10-27 (files retrieved 17:42-17:44 UTC): 52 games final, all present; in all 104 team box scores the players' points equal the team's score and their minutes fill the game. Fallback: Eric's game-log screenshots (analyze --minutes). API-Sports' free plan was probed the same day and cannot serve"
+  box_score_check:
+    value: {players_on_court: 5, period_minutes: 12, overtime_minutes: 5}
+    status: FACT
+    source: "RULES Appendix A: NBA playing rules. Matches the 2026-10-27 check: team minutes 238-243 in the regulation games and 264-266 in the two overtime games"
+  box_score_minutes_tolerance_per_player:
+    value: 0.5
+    status: RULE
+    source: "RULES R-9.3: ESPN gives whole minutes (all 1,442 player rows on 2026-10-27), so rounding moves each player at most half a minute"
   minutes_screenshot_from_et:
     value: "06:00"
     status: RULE

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import copy
+import csv
+import io
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from bethero_nba import consensus, oddsapi
 from bethero_nba.config import Config
@@ -109,3 +111,45 @@ def context(cfg, game_board, **overrides):
                 lag=lambda g, market: market == "handicap", flags={})
     base.update(overrides)
     return PassContext(**base)
+
+
+# ------------------------------------------------- box scores (RULES R-9.3)
+
+BOX_HEADER = ["game_id", "athlete_id", "athlete_display_name", "team_abbreviation", "minutes", "points",
+              "did_not_play"]
+SCHEDULE_HEADER = ["game_id", "game_date", "status_type_name", "status_period", "format_regulation_periods",
+                   "home_abbreviation", "away_abbreviation", "home_score", "away_score"]
+# Nine Knicks who fill 240 minutes when Brunson plays 35; 10 points each. ESPN codes, as in the files.
+KNICKS = [("1", "Jalen Brunson", 35), ("2", "Josh Hart", 30), ("3", "OG Anunoby", 34),
+          ("4", "Karl-Anthony Towns", 33), ("5", "Mikal Bridges", 36), ("6", "Miles McBride", 24),
+          ("7", "Mitchell Robinson", 18), ("8", "Cameron Payne", 12), ("9", "Landry Shamet", 18)]
+
+
+def _csv(header, rows):
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\n")
+    writer.writerow(header)
+    writer.writerows(rows)
+    return out.getvalue()
+
+
+def box_season(games=12, brunson=35, start=date(2026, 10, 20), change=None):
+    """(player box CSV, schedule CSV) for NY@BOS on consecutive days, every box score consistent.
+    Robinson absorbs Brunson's minutes so the Knicks always fill 240. `change(i, knicks, row)` may
+    edit game i's Knicks rows (lists) and schedule row (dict) before they are written."""
+    def played(aid, m):
+        return brunson if aid == "1" else m + 35 - brunson if aid == "7" else m
+
+    box, schedule = [], []
+    for i in range(games):
+        game_id, day = str(100 + i), start + timedelta(days=i)
+        knicks = [[game_id, aid, name, "NY", f"{played(aid, m):.1f}", "10", "false"] for aid, name, m in KNICKS]
+        celtics = [[game_id, f"9{k}", f"Celtic {k}", "BOS", "48.0", "20", "false"] for k in range(5)]
+        row = {"game_id": game_id, "game_date": day.isoformat(), "status_type_name": "STATUS_FINAL",
+               "status_period": "4.0", "format_regulation_periods": "4.0", "home_abbreviation": "BOS",
+               "away_abbreviation": "NY", "home_score": "100", "away_score": "90"}
+        if change:
+            change(i, knicks, row)
+        box += knicks + celtics
+        schedule.append([row[k] for k in SCHEDULE_HEADER])
+    return _csv(BOX_HEADER, box), _csv(SCHEDULE_HEADER, schedule)

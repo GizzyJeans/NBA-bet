@@ -43,19 +43,24 @@ def test_report_names_markets_held_only_by_listed_players(cfg):
         return report.render(decisions, report.ReportMeta(b, ANALYSIS_TS, US_TS, REPORT_TS, "shadow",
                                                           100000, 5000, 0, (10, 28)))
 
-    text = rendered(blocking={label: ["Brunson, Jalen（Questionable）"]})
+    text = rendered(blocking={label: ["Brunson, Jalen（Questionable）"]}, unsupplied={label: ["Brunson, Jalen"]})
     assert "今天沒有合格的注。" in text
     held = [line for line in text.splitlines() if line.startswith("- 只差傷病：")]
     assert len(held) == 1                                                  # one line per game
     assert "塞爾提克 讓 2.5（EV +" in held[0] and "塞爾提克 獨贏（EV +" in held[0]
-    assert held[0].endswith("被 Brunson, Jalen（Questionable） 擋下。若他本季近 10 場平均上場不到 28 分鐘，"
-                            "傳他本季逐場上場時間的截圖，我重算")
-    two = rendered(blocking={label: ["Brunson, Jalen（Questionable）", "Hart, Josh（Doubtful）"]})
+    assert held[0].endswith("被 Brunson, Jalen（Questionable） 擋下。沒有他的上場時間資料；若他本季近 10 場平均上場"
+                            "不到 28 分鐘，傳他本季逐場上場時間的截圖（Basketball-Reference 除外），我重算")
+    two = rendered(blocking={label: ["Brunson, Jalen（Questionable）", "Hart, Josh（Doubtful）"]},
+                   unsupplied={label: ["Brunson, Jalen", "Hart, Josh"]})
     assert "若他們本季近 10 場平均上場都不到 28 分鐘，傳他們" in two
+    # once the box scores show he is key (too few games, or 28 minutes or more), no screenshot can help
+    short = rendered(blocking={label: ["Brunson, Jalen（Questionable，本季出賽 4 場）"]}, unsupplied={label: []})
+    held = [line for line in short.splitlines() if line.startswith("- 只差傷病：")]
+    assert held[0].endswith("擋下。依 R-9.3 他目前算關鍵球員，傷病狀態更新才會放行") and "截圖" not in held[0]
 
     note = "Brunson, Jalen（Questionable，本季近 10 場平均 12.0 分鐘）"
     text = rendered(cleared={label: [note]})
-    assert f"替補放行（上場時間來自截圖）：尼克@塞爾提克 {note}" in text
+    assert f"替補放行：尼克@塞爾提克 {note}" in text
     assert "只差傷病" not in text and "今天沒有合格的注。" not in text
 
 

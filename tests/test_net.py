@@ -87,3 +87,13 @@ def test_tampered_cache_is_caught(tmp_path):
         fh.write(b'{"ok": false}')
     with pytest.raises(net.FetchError, match="SHA-256"):
         net.load_cached(fetched.path)
+
+
+def test_csv_files_are_stored_as_csv(tmp_path):
+    client, _ = make_client(tmp_path, opener=FakeOpener(body=b"game_id,minutes\n1,36.0\n"))
+    fetched = client.get("https://example.com/releases/download/x/player_box_2027.csv")
+    assert fetched.path.name.endswith(".csv.gz") and net.meta_path(fetched.path).exists()
+    again = net.load_cached(fetched.path)
+    assert again.text().splitlines() == ["game_id,minutes", "1,36.0"]
+    with pytest.raises(net.FetchError):
+        net.meta_path(tmp_path / "notes.txt")

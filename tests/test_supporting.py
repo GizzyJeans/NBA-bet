@@ -45,19 +45,25 @@ def test_blocking_players_treat_unknown_minutes_as_key(cfg):
     tl = injuries.Timeline(injuries.parse_rows(ROWS, t))
     # Brunson is Questionable; Hart (Out) and Tatum (Probable) never block
     assert injuries.blocking_players(tl, ("NYK", "BOS"), None, cfg, t) == ["Brunson, Jalen（Questionable）"]
+    assert injuries.listed_players(tl, ("NYK", "BOS"), None, cfg, t) == (
+        ["Brunson, Jalen（Questionable）"], [], ["Brunson, Jalen"])            # no minutes: unsupplied
     minutes = {"NYK": {"Brunson, Jalen": [35] * 10, "Hart, Josh": [36] * 10}, "BOS": {"Tatum, Jayson": [37] * 10}}
-    assert injuries.blocking_players(tl, ("NYK", "BOS"), minutes, cfg, t) == ["Brunson, Jalen（Questionable）"]
+    assert injuries.blocking_players(tl, ("NYK", "BOS"), minutes, cfg, t) == [
+        "Brunson, Jalen（Questionable，本季近 10 場平均 35.0 分鐘）"]
     bench = {"NYK": {"Brunson, Jalen": [12] * 10}}
     assert injuries.blocking_players(tl, ("NYK", "BOS"), bench, cfg, t) == []
     assert injuries.listed_players(tl, ("NYK", "BOS"), bench, cfg, t) == (
-        [], ["Brunson, Jalen（Questionable，本季近 10 場平均 12.0 分鐘）"])
+        [], ["Brunson, Jalen（Questionable，本季近 10 場平均 12.0 分鐘）"], [])
     # nine games are not a 10-game average, so he still counts as key; of eleven, the last ten count
     nine = {"NYK": {"Brunson, Jalen": [12] * 9}}
-    assert injuries.blocking_players(tl, ("NYK", "BOS"), nine, cfg, t) == ["Brunson, Jalen（Questionable）"]
+    assert injuries.listed_players(tl, ("NYK", "BOS"), nine, cfg, t) == (
+        ["Brunson, Jalen（Questionable，本季出賽 9 場）"], [], [])
     eleven = {"NYK": {"Brunson, Jalen": [40] + [12] * 10}}
     assert injuries.blocking_players(tl, ("NYK", "BOS"), eleven, cfg, t) == []
     starter = {"NYK": {"Brunson, Jalen": [12] * 5 + [44] * 5}}           # average 28.0: key
-    assert injuries.blocking_players(tl, ("NYK", "BOS"), starter, cfg, t) == ["Brunson, Jalen（Questionable）"]
+    assert injuries.blocking_players(tl, ("NYK", "BOS"), starter, cfg, t) == [
+        "Brunson, Jalen（Questionable，本季近 10 場平均 28.0 分鐘）"]
+    assert injuries.listed(tl, ("NYK", "BOS"), cfg, t) == {"NYK": {"Brunson, Jalen"}}
     quiet_rows = [ROWS[0], ["11/02/2026", "07:30 (ET)", "NYK@BOS", "New York Knicks", "Hart, Josh", "Out", "Knee"],
                   ROWS[3]]
     quiet = injuries.Timeline(injuries.parse_rows(quiet_rows, t))                # nobody Questionable or Doubtful

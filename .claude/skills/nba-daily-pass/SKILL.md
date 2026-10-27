@@ -32,10 +32,11 @@ Eric's screenshot is the only platform source (RULES §1, item 7).
   - Game-day statuses count only from a report published at or after 1 p.m. local on game day (R-4.5).
 - **Referees.** The time on Eric's referee-assignments screenshot becomes `--referees-posted-at` (ISO-8601, `+08:00`). Without it every game stops at `NB-STATUS`; tell Eric.
 - **If `read_pdf` raises `ReportFormatError`.** The layout changed: stop, tell Eric, and do not hand-patch the reading. A JSON transcription (README) is the fallback.
-- **Minutes, only on request (R-9.3, R-16.6).** When the report has a 只差傷病 line, ask Eric for a screenshot of each named player's game log this season, with the phone clock visible.
-  - Transcribe his games played this season, oldest first, to `data/minutes/<slate_et>.json` (README format), with names as the injury report prints them. Commit it and re-run the pass with `--minutes`.
-  - It counts only if taken on the slate's ET date from `injuries.minutes_screenshot_from_et` on. Relay any `minutes not used` or unmatched-name line.
-  - Never fill minutes from memory or any other source; with fewer than 10 games the player stays key.
+- **Minutes (R-9.3).** With an injury source, `analyze --live` downloads ESPN's box scores (sportsdataverse) when a listed player needs minutes, and checks every game first.
+  - Relay any `box scores not used` or `no box-score minutes for` line, and the report's 只差傷病 lines.
+  - Only when a 只差傷病 line asks for a screenshot, ask Eric for each named player's game log this season, with the phone clock visible and not from Basketball-Reference (its terms forbid AI use).
+  - Transcribe his games played this season, oldest first, to `data/minutes/<slate_et>.json` (README format), with names as the injury report prints them. Commit it and re-run with `--minutes`, plus `--odds` and `--box-scores` with the stored files.
+  - It counts only if taken on the slate's ET date from `injuries.minutes_screenshot_from_et` on. Never fill minutes from memory or any other source; with fewer than 10 games the player stays key.
 
 ## 3. Analysis pass
 

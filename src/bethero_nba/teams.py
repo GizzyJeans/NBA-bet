@@ -1,7 +1,8 @@
 """NBA teams: tricode, The Odds API name, Chinese name, home-arena time zone.
 
 Tricodes are the join key: the platform board prints them next to the Chinese
-name (「ORL 魔術[主]」), and the US feed is mapped to them by full name.
+name (「ORL 魔術[主]」), and the US feed is mapped to them by full name. The
+platform's and ESPN's own codes (box scores, RULES R-9.3) are aliases.
 Chinese names are display only. 魔術, 老鷹, 巫師 and 公鹿 are as seen on Eric's
 board (2026-10-21); the rest are the usual Taiwanese names and get corrected
 from later screenshots if the platform differs. Time zones are those of each
@@ -32,7 +33,7 @@ TEAMS: tuple[Team, ...] = (
     Team("DAL", "Dallas Mavericks", "獨行俠", "America/Chicago", ("小牛",)),
     Team("DEN", "Denver Nuggets", "金塊", "America/Denver"),
     Team("DET", "Detroit Pistons", "活塞", "America/Detroit"),
-    Team("GSW", "Golden State Warriors", "勇士", "America/Los_Angeles"),
+    Team("GSW", "Golden State Warriors", "勇士", "America/Los_Angeles", ("GS",)),         # ESPN code
     Team("HOU", "Houston Rockets", "火箭", "America/Chicago"),
     Team("IND", "Indiana Pacers", "溜馬", "America/Indiana/Indianapolis"),
     Team("LAC", "Los Angeles Clippers", "快艇", "America/Los_Angeles", ("LA Clippers",)),   # NBA's own spelling
@@ -41,18 +42,18 @@ TEAMS: tuple[Team, ...] = (
     Team("MIA", "Miami Heat", "熱火", "America/New_York"),
     Team("MIL", "Milwaukee Bucks", "公鹿", "America/Chicago"),
     Team("MIN", "Minnesota Timberwolves", "灰狼", "America/Chicago"),
-    Team("NOP", "New Orleans Pelicans", "鵜鶘", "America/Chicago", ("NO",)),      # platform code
-    Team("NYK", "New York Knicks", "尼克", "America/New_York"),
+    Team("NOP", "New Orleans Pelicans", "鵜鶘", "America/Chicago", ("NO",)),      # platform and ESPN code
+    Team("NYK", "New York Knicks", "尼克", "America/New_York", ("NY",)),           # ESPN code
     Team("OKC", "Oklahoma City Thunder", "雷霆", "America/Chicago"),
     Team("ORL", "Orlando Magic", "魔術", "America/New_York"),
     Team("PHI", "Philadelphia 76ers", "76人", "America/New_York", ("七六人",)),
     Team("PHX", "Phoenix Suns", "太陽", "America/Phoenix", ("PHO",)),           # platform code
     Team("POR", "Portland Trail Blazers", "拓荒者", "America/Los_Angeles"),
     Team("SAC", "Sacramento Kings", "國王", "America/Los_Angeles"),
-    Team("SAS", "San Antonio Spurs", "馬刺", "America/Chicago", ("SAN",)),       # platform code
+    Team("SAS", "San Antonio Spurs", "馬刺", "America/Chicago", ("SAN", "SA")),  # platform, ESPN codes
     Team("TOR", "Toronto Raptors", "暴龍", "America/Toronto"),
-    Team("UTA", "Utah Jazz", "爵士", "America/Denver"),
-    Team("WAS", "Washington Wizards", "巫師", "America/New_York"),
+    Team("UTA", "Utah Jazz", "爵士", "America/Denver", ("UTAH",)),                 # ESPN code
+    Team("WAS", "Washington Wizards", "巫師", "America/New_York", ("WSH",)),       # ESPN code
 )
 
 _BY_KEY: dict[str, Team] = {}

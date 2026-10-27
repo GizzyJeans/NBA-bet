@@ -2,6 +2,21 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.3 · 2026-10-27
+
+- R-9.3: listed players' minutes now come automatically from ESPN's box scores as sportsdataverse publishes them (`injuries.minutes_source`, RULE, value changed). Eric 2026-10-27 asked 「沒有其他的方法查上場時間嗎?」.
+  - Evidence (Appendix B):
+    - CC BY 4.0, no key, refreshed daily in season.
+    - Checked 2026-10-27: all 52 final games present; in all 104 team box scores the points equal the team's score and the minutes fill the game.
+    - All 18 players listed Questionable or Doubtful on the 10-24 and 10-26 reports (two-way assignments aside) matched one ESPN player.
+  - `analyze --live` downloads the two season files when a listed player needs minutes; `--box-scores` re-uses stored ones; `python -m bethero_nba.boxscores` checks them.
+  - A player's minutes are supplied only if his name matches one player of his team and every game his team played before the slate is final and passes both checks. New `injuries.box_score_check` (FACT, game length; Appendix A) and `injuries.box_score_minutes_tolerance_per_player` = 0.5 (RULE, ESPN gives whole minutes).
+  - Stricter: a game with 0 minutes is not a game played.
+- Eric's screenshot transcription stays as the fallback and wins for the players it names. It may not come from a Sports Reference site, whose terms forbid using its data with AI (ERRATA E-009).
+- R-16.6: blockers show what their minutes showed (games played, or average). The screenshot request appears only when no blocker's minutes are known; otherwise the line says they are key until their status changes. Every report that uses the box scores ends with the CC BY credit.
+- Appendix B: the API-Sports game with 266 minutes went to overtime; the earlier text called it a 240-minute game (ERRATA E-010).
+- Consequence for bets: none yet. No team has played 10 games, so every listed player stays key. By the ESPN schedule, teams play their 10th game between 11-06 and 11-11; clearances can start the day after.
+
 ## 0.6.2 · 2026-10-27
 
 - R-9.3: listed players' minutes now come from Eric's game-log screenshots.

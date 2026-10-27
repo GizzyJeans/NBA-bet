@@ -67,6 +67,7 @@ class PassContext:
     injury_report_ts: datetime | None = None
     blocking: dict[str, list[str]] | None = None      # game label -> key players Q/D; None = no data
     cleared: dict[str, list[str]] | None = None       # game label -> listed players cleared by minutes (R-9.3)
+    unsupplied: dict[str, list[str]] | None = None    # game label -> listed key players without minutes
     tier_b: Any | None = None                         # VALIDATED distribution provider, else None
     model: Callable[[BoardGame], dict | None] | None = None   # {"home_margin", "total"}
     lag: Callable[[BoardGame, str], bool] | None = None       # RULES R-9.5 holds
@@ -108,6 +109,7 @@ class Decision:
     waivers: list[str] = field(default_factory=list)     # gates Eric waived for this slate
     waived: list[str] = field(default_factory=list)      # what each waiver let through
     held_by: list[str] = field(default_factory=list)     # listed key players, when they alone hold G7
+    held_unsupplied: list[str] = field(default_factory=list)   # those of them without minutes
     cleared: list[str] = field(default_factory=list)     # listed players cleared by their minutes (R-9.3)
 
     def fail(self, code: str, note: str | None = None) -> None:
@@ -184,7 +186,8 @@ class Decision:
             "codes": self.codes, "primary": self.primary, "notes": self.notes,
             "flags": self.flags, "confidence": self.confidence, "edge_label": self.edge_label,
             "model_d": self.model_d, "worst_line": self.worst_line, "waivers": self.waivers,
-            "waived": self.waived, "held_by": self.held_by, "cleared": self.cleared,
+            "waived": self.waived, "held_by": self.held_by, "held_unsupplied": self.held_unsupplied,
+            "cleared": self.cleared,
         }
 
 
@@ -349,6 +352,7 @@ def _evaluate(game: BoardGame, market: Market, side: str, laying: bool, gc: Game
         d.fail("NB-STATUS", blocked)
         if eligible and ctx.blocking is not None:
             d.held_by = list(ctx.blocking[game.label])
+            d.held_unsupplied = list((ctx.unsupplied or {}).get(game.label, ()))
     d.cleared = list((ctx.cleared or {}).get(game.label, ()))
 
     if d.priced:
