@@ -2,6 +2,12 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.5 · 2026-10-28
+
+- Provenance only; no rule or value changed.
+  - Appendix A: the referee posting time now cites the page's own statement, "Referee assignments are posted at approximately 9:00am ET each game day", seen on Eric's screenshot of the 2026-10-27 page. The 10:00 ET time rule (0.6.4) keeps an hour of margin.
+  - Appendix B: official.nba.com still refuses this environment (Akamai 403 "Access Denied", one request on 2026-10-28, after Eric asked whether Claude could read the page). Nothing works around it.
+
 ## 0.6.4 · 2026-10-27
 
 - R-4.5(b): referee assignments count as posted from `snapshots.referee_assignments_posted_by_et` = "10:00" ET on the game date (new, CONFIRMED). Eric 2026-10-27 chose 「B 改用時間規則 (建議)」 over keeping the daily screenshot.
