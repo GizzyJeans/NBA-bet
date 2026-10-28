@@ -1,0 +1,20 @@
+{
+  "schema": "bethero-nba-referees/1",
+  "slate_et": "2026-10-28",
+  "seen_at": "2026-10-28T23:44:00+08:00",
+  "source": "Eric's screenshots of official.nba.com/referee-assignments dated October 28, 2026, phone clock 11:44 (Taipei, evening: the page lists that day's assignments, posted about 9:00 a.m. ET = 21:00 Taipei). Not needed since config 0.6.4 (time rule: posted from 10:00 ET); kept as evidence",
+  "games": [
+    "MIA@ATL",
+    "WAS@CLE",
+    "CHA@DET",
+    "PHI@IND",
+    "ORL@TOR",
+    "NYK@CHI",
+    "HOU@MIL",
+    "GSW@MIN",
+    "DEN@NOP",
+    "SAS@UTA",
+    "OKC@DAL",
+    "LAL@LAC"
+  ]
+}
