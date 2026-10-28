@@ -76,3 +76,10 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
 - **Correct:** that game, MIN@CLE, went to overtime (ESPN schedule: 5 periods), so 265 is right; API-Sports' period count of 4 was what was wrong.
 - **Impact:** one of the reasons given against API-Sports was misstated. The conclusion stands on its three-day window and the 5 team box scores missing players. No number, gate or stake changed.
 - **Fix:** Appendix B corrected in RULES 0.6.3.
+
+## E-011 · 2026-10-28 · Commit `19f740e` (config 0.6.5)
+
+- **Wrong:** pushed a `config.yaml` that does not parse. A source string gained unescaped double quotes, so every command would refuse to load the config. The pre-commit test run was piped through `tail`, so its failure (5 failed, 69 errors) did not stop the commit.
+- **Impact:** none on any number, gate, stake or pass. No pass ran on that commit; the next commit fixes it.
+- **Fix:** the quotes are single quotes. Checks before a commit are run on their own, so a failure stops the commit.
+

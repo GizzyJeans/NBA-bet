@@ -7,6 +7,7 @@ Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on E
 - Provenance only; no rule or value changed.
   - Appendix A: the referee posting time now cites the page's own statement, "Referee assignments are posted at approximately 9:00am ET each game day", seen on Eric's screenshot of the 2026-10-27 page. The 10:00 ET time rule (0.6.4) keeps an hour of margin.
   - Appendix B: official.nba.com still refuses this environment (Akamai 403 "Access Denied", one request on 2026-10-28, after Eric asked whether Claude could read the page). Nothing works around it.
+  - The first commit of this version (`19f740e`) left `config.yaml` unparseable; fixed in the next commit (ERRATA E-011).
 
 ## 0.6.4 · 2026-10-27
 
