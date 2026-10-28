@@ -83,3 +83,19 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
 - **Impact:** none on any number, gate, stake or pass. No pass ran on that commit; the next commit fixes it.
 - **Fix:** the quotes are single quotes. Checks before a commit are run on their own, so a failure stops the commit.
 
+## E-012 · 2026-10-28 · Phase 3 `src/bethero_nba/dist.py`: the comparison family at large spreads
+
+- **Wrong:**
+  - `EmpiricalFamily` said "a symmetric kernel keeps the mixture centred".
+  - `anchor` said that P(cover) moves one way as the line moves, so bisection finds the one root.
+- **Correct:** neither holds where history is sparse or one-sided.
+  - Each bucket enters the mixture with the same weight whatever its size, so at large spreads a few games at nearby lines decide it.
+  - VALIDATION.md R8 (2026-10-28), anchored to 0.5 at home lines −20 to +20, found two problems with the empirical family:
+    - it cannot be anchored at −20 to −17, +13.5 and +14;
+    - it anchors without moving one way at −15.5 to −12.5, +13 and +14.5 to +17.5.
+  - 61 of the 336 holdout games with laid lines of 12+ points are at lines where it cannot be anchored.
+- **Impact:** no stake. No decision changed.
+  - Tier B fails closed where the family cannot be anchored, so the SAC@SAS (2026-10-27) and SAS@UTA (2026-10-28) handicaps were not priced.
+  - Where it anchors without moving one way, σ_translate's model term rests on an erratic comparison. Three live markets were priced this way: SAS@DAL +15.5 (10-24 slate), CHI@BOS −14.5 (10-26) and BKN@BOS −12.5 (10-27). Each was a non-bet for other reasons; the best EV was +0.7%.
+- **Fix:** the docstrings now say what holds. VALIDATION.md §4 tested a shifted variant; it failed T2 and T3, so production is unchanged (RULES 0.6.6).
+

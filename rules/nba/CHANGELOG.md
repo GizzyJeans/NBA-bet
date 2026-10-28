@@ -2,6 +2,17 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.6 · 2026-10-28
+
+- VALIDATION.md §4 tested a fix for large spreads. Eric 2026-10-28: 「好，去改善大讓分的換算」. The criteria were pre-declared and committed (02b7c4c) before anything was computed.
+  - **T1 passed.** Anchored at laid lines of 12+ points, the selected normal family translates within tolerance: max |a(o)| 0.0184 against 0.0535, holdout N = 336.
+  - **T2 failed.** The shifted empirical family rises somewhere at 150 of 405 line and p_ref combinations.
+  - **T3 failed.** a(−1.5) = −0.0531 against a tolerance of 0.0529.
+  - As declared, nothing changes. New `distribution.comparison_fallback` = none (RULE), and spreads where the empirical family cannot be anchored still stop at `NB-TIER-C`.
+- R-6.4 names the new key. `validate` now also writes R8, and R1–R7 are unchanged.
+- ERRATA E-012: the empirical family's docstring claimed the mixture stays centred, and the anchoring docstring claimed the cover moves one way. Neither holds where history is sparse.
+- Consequence for bets: none. No market changes status, and the three earlier large-spread markets priced at Tier B were non-bets for other reasons.
+
 ## 0.6.5 · 2026-10-28
 
 - Provenance only; no rule or value changed.

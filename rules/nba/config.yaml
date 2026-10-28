@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.6.5
+  version: 0.6.6
   updated: 2026-10-28
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -351,6 +351,10 @@ distribution:
     value: {spread: normal, total: normal}
     status: VALIDATED
     source: "VALIDATION.md R3 (V2): lower holdout log loss over the nine offsets, spreads 0.75262 vs 0.75512 empirical, totals 0.73466 vs 0.75169 (N = 2441, 2438)"
+  comparison_fallback:
+    value: {spread: none, total: none}
+    status: RULE
+    source: "VALIDATION.md §4 and R8 (pre-declared 2026-10-28, commit 02b7c4c): the shifted empirical family failed T2 (it rises at 150 of 405 line and p_ref combinations) and T3 (a(-1.5) = -0.0531 against 0.0529, N = 336), so no family replaces the comparison where the empirical family cannot be anchored. T1 passed: the normal family translates within tolerance at laid lines of 12+ (max |a| 0.0184 against 0.0535)"
   bug_bands:
     value: {margin_sigma: [10, 15], total_sigma: [15, 23]}
     status: UNVALIDATED

@@ -94,7 +94,9 @@ class EmpiricalFamily:
 
     Buckets near s are mixed with Gaussian weights of `bandwidth` points and
     never shifted, so the integer structure of each bucket (key margins,
-    overtime clusters) survives; a symmetric kernel keeps the mixture centred.
+    overtime clusters) survives. Each bucket weighs the same whatever its size,
+    so where history is sparse or lies on one side of s the mixture leans
+    toward the nearby lines and need not move one way with s (ERRATA E-012).
     """
 
     def __init__(self, market: str, observations: Iterable[tuple[float, int]],
@@ -144,6 +146,41 @@ class EmpiricalFamily:
         return num / den if den else 0.0
 
 
+class ShiftedEmpiricalFamily(EmpiricalFamily):
+    """The empirical family with each neighbouring bucket moved to the target line
+    before mixing (VALIDATION.md §4 L2).
+
+    A bucket at line b contributes its outcomes shifted by location(s) -
+    location(b), each outcome's mass split between the two nearest integers, so
+    the mixture stays centred on s however unevenly the history lies around it.
+    The unshifted mixture leans toward the denser lines beside a sparse one,
+    which is why it cannot be anchored at large spreads. Spreads drop the tied
+    margin, as the normal family does.
+    """
+
+    def pmf(self, s: float) -> dict[int, float]:
+        weights = self._weights(s)
+        mass: dict[int, float] = {}
+        total = 0.0
+        for b, w in weights.items():
+            d = _location(self.market, s) - _location(self.market, b)
+            step = math.floor(d)
+            frac = d - step
+            n = sum(self.buckets[b].values())
+            for x, count in self.buckets[b].items():
+                p = w * count / n
+                mass[x + step] = mass.get(x + step, 0.0) + p * (1 - frac)
+                if frac > 0:
+                    mass[x + step + 1] = mass.get(x + step + 1, 0.0) + p * frac
+            total += w
+        if total == 0:
+            raise ValueError(f"no history within reach of line {s}")
+        if self.market == "spreads":
+            mass.pop(0, None)
+        z = sum(mass.values())
+        return {x: m / z for x, m in mass.items() if m > 0}
+
+
 class NormalFamily:
     """Discretized normal around the line-implied location, with no mass at a
     tied margin (overtime settles every game)."""
@@ -182,6 +219,7 @@ class Anchored:
     pmf: dict[int, float]
     s_star: float
     effective_n: float
+    family: str = ""                   # the family's class name, for the ledger
 
     def cover(self, x: float) -> float:
         return cover_from_pmf(self.pmf, x)
@@ -197,56 +235,65 @@ class Anchored:
         return a
 
 
-def anchor(family, ref_line: float, p_ref: float, *,
-           search: tuple[float, ...] = (3.0, 6.0, 15.0)) -> Anchored:
+def line_probability(family, s: float, ref_line: float) -> float:
+    """What anchoring matches at line s: P(home covers ref_line) (spreads) or P(over
+    ref_line) (totals); at an integer line, the share of non-push outcomes."""
+    point = -ref_line if family.market == "spreads" else ref_line
+    pmf = family.pmf(s)
+    if abs(point - round(point)) < 1e-9:
+        win = cover_from_pmf(pmf, point)
+        push = pmf.get(int(round(point)), 0.0)
+        return win / (1 - push) if push < 1 else 0.0
+    return cover_from_pmf(pmf, point)
+
+
+SEARCH = (3.0, 6.0, 15.0)
+
+
+def find_bracket(family, ref_line: float, p_ref: float, search: tuple[float, ...] = SEARCH):
+    """The narrowest window (lo, hi) around the line where the family crosses p_ref,
+    or None. A wide window around a 15-point line reaches lines the empirical family
+    has no history for (ERRATA E-007), so the narrow ones come first."""
+    sign = -1.0 if family.market == "spreads" else 1.0
+    for width in search:
+        lo, hi = ref_line - width, ref_line + width
+        try:
+            f_lo = sign * (line_probability(family, lo, ref_line) - p_ref)
+            f_hi = sign * (line_probability(family, hi, ref_line) - p_ref)
+        except ValueError:                 # no history that far out; a wider window is no better
+            return None
+        if f_lo <= 0 <= f_hi:
+            return lo, hi
+    return None
+
+
+def anchor(family, ref_line: float, p_ref: float, *, search: tuple[float, ...] = SEARCH) -> Anchored:
     """Find s* such that the family gives the consensus P(home covers ref_line)
     (spreads) or P(over ref_line) (totals) = p_ref.
 
     The reference point is the half-point X must exceed: home -5.5 needs
     X > 5.5; over 228.5 needs X > 228.5. Integer reference lines are anchored
-    on the no-push share. P(cover) rises as s moves toward the home side, so
-    bisection on s is monotone and its root is unique. The root is searched in
-    the narrowest window around the line that brackets it: a wide window
-    around a 15-point line reaches lines the empirical family has no history
-    for (ERRATA E-007).
+    on the no-push share. For the normal and shifted empirical families P(cover)
+    falls as s moves away from the home side (rises with s for totals), so
+    bisection finds the one root. The unshifted empirical family need not move
+    one way where its history is sparse (VALIDATION.md §4); when it does not
+    cross p_ref inside the window it raises, and Tier B fails closed (R-6.4).
     """
     market = family.market
-    point = -ref_line if market == "spreads" else ref_line
-
-    def gap(s: float) -> float:
-        pmf = family.pmf(s)
-        if abs(point - round(point)) < 1e-9:              # integer line: no-push share
-            win = cover_from_pmf(pmf, point)
-            push = pmf.get(int(round(point)), 0.0)
-            prob = win / (1 - push) if push < 1 else 0.0
-        else:
-            prob = cover_from_pmf(pmf, point)
-        return prob - p_ref
-
-    # spreads: a more negative s means a stronger home side; totals: higher s, more overs
     sign = -1.0 if market == "spreads" else 1.0
-    bracket = None
-    for width in search:
-        lo, hi = ref_line - width, ref_line + width
-        try:
-            f_lo, f_hi = sign * gap(lo), sign * gap(hi)
-        except ValueError:                 # no history that far out; a wider window is no better
-            break
-        if f_lo <= 0 <= f_hi:
-            bracket = (lo, hi)
-            break
+    bracket = find_bracket(family, ref_line, p_ref, search)
     if bracket is None:
         raise ValueError(f"cannot anchor {market} at {ref_line} to {p_ref:.4f} within ±{max(search)}")
     lo, hi = bracket
     for _ in range(60):
         mid = 0.5 * (lo + hi)
-        if sign * gap(mid) < 0:
+        if sign * (line_probability(family, mid, ref_line) - p_ref) < 0:
             lo = mid
         else:
             hi = mid
     s_star = 0.5 * (lo + hi)
     eff_n = family.effective_n(s_star) if hasattr(family, "effective_n") else math.inf
-    return Anchored(family.pmf(s_star), s_star, eff_n)
+    return Anchored(family.pmf(s_star), s_star, eff_n, type(family).__name__)
 
 
 def save_families(path: Path | str, empirical: EmpiricalFamily, normal: NormalFamily, meta: dict) -> None:
@@ -276,11 +323,14 @@ def load_families(path: Path | str) -> tuple[EmpiricalFamily, NormalFamily, dict
 
 
 def load_tier_b(directory: Path | str, markets: Iterable[str], selected: dict[str, str],
-                bandwidths: dict[str, float] | None = None) -> "TierB | None":
+                bandwidths: dict[str, float] | None = None,
+                fallback: dict[str, str] | None = None) -> "TierB | None":
     """TierB for the validated markets only, from the files `validate --write-dist` wrote.
-    `selected` and `bandwidths` are the config's (keyed spread / total); a file that
-    disagrees with them, or was not validated, is refused rather than used."""
-    primary, alternative = {}, {}
+    `selected`, `bandwidths` and `fallback` are the config's (keyed spread / total); a file
+    that disagrees with them, or was not validated, is refused rather than used. A market
+    whose fallback is `shifted_empirical` gets that family, built from the same counts, as
+    the comparison where the empirical family cannot be anchored (VALIDATION.md §4)."""
+    primary, alternative, backup = {}, {}, {}
     for market in markets:
         path = Path(directory) / f"{market}.json"
         empirical, normal, meta = load_families(path)
@@ -291,7 +341,10 @@ def load_tier_b(directory: Path | str, markets: Iterable[str], selected: dict[st
             raise ValueError(f"{path}: bandwidth {empirical.bandwidth} differs from the config's {bandwidths[scale]}")
         first, second = (empirical, normal) if selected[scale] == "empirical" else (normal, empirical)
         primary[market], alternative[market] = first, second
-    return TierB(primary, alternative) if primary else None
+        if (fallback or {}).get(scale) == "shifted_empirical" and second is empirical:
+            backup[market] = ShiftedEmpiricalFamily.from_buckets(
+                market, empirical.buckets, bucket_width=empirical.bucket_width, bandwidth=empirical.bandwidth)
+    return TierB(primary, alternative, backup) if primary else None
 
 
 class TierB:
@@ -302,12 +355,20 @@ class TierB:
     VALIDATION.md selected (cfg:distribution.selected_method).
     """
 
-    def __init__(self, primary: dict[str, object], alternative: dict[str, object]):
+    def __init__(self, primary: dict[str, object], alternative: dict[str, object],
+                 fallback: dict[str, object] | None = None):
         self.primary, self.alternative = primary, alternative
+        self.fallback = fallback or {}      # comparison where `alternative` cannot be anchored
 
     def anchored(self, market: str, ref_line: float, p_ref: float) -> tuple[Anchored, Anchored]:
-        return (anchor(self.primary[market], ref_line, p_ref),
-                anchor(self.alternative[market], ref_line, p_ref))
+        first = anchor(self.primary[market], ref_line, p_ref)
+        try:
+            second = anchor(self.alternative[market], ref_line, p_ref)
+        except ValueError:
+            if market not in self.fallback:
+                raise
+            second = anchor(self.fallback[market], ref_line, p_ref)
+        return first, second
 
     @staticmethod
     def sigma_translate(primary: Anchored, alternative: Anchored, ref_point: float, x: float) -> float:

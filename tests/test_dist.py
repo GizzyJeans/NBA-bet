@@ -102,3 +102,58 @@ def test_anchoring_a_big_line_stays_inside_the_history():
     assert 13.0 < anchored.s_star < 18.0
     with pytest.raises(ValueError):
         dist.anchor(fam, 15.5, 0.5, search=(15.0,))                 # the old single wide window
+
+
+def one_sided(seed=11):
+    """Dense history at smaller spreads and none beyond -13.5: the shape that tilts the
+    unshifted mixture toward smaller lines (VALIDATION.md §4)."""
+    rng = random.Random(seed)
+    rows = []
+    for spread in [-9.5] * 800 + [-11.5] * 400 + [-13.5] * 100:
+        margin = 0
+        while margin == 0:
+            margin = round(rng.gauss(-spread, 12.0))
+        home = 110 + margin if margin > 0 else 110
+        rows.append(HistoryRow("2024-25", date(2025, 1, 1), "BOS", "NYK", home, home - margin,
+                               spread, 228.5, "synthetic"))
+    return rows
+
+
+def test_shifted_family_stays_centred_beyond_the_history():
+    emp = EmpiricalFamily.fit(one_sided(), "spreads", bucket_width=0.5, bandwidth=2.0)
+    se = dist.ShiftedEmpiricalFamily.from_buckets("spreads", emp.buckets, bucket_width=0.5, bandwidth=2.0)
+
+    def mean(pmf):
+        return sum(k * p for k, p in pmf.items())
+
+    assert mean(emp.pmf(-15.5)) < 14.0                      # leans toward the denser smaller lines
+    # centred up to the sampling noise of 100-game buckets (12 / sqrt(100) = 1.2 points)
+    assert mean(se.pmf(-15.5)) == pytest.approx(15.5, abs=1.0)
+    assert abs(mean(se.pmf(-15.5)) - 15.5) < abs(mean(emp.pmf(-15.5)) - 15.5)
+    pmf = se.pmf(-15.25)                                     # a quarter-point shift splits the mass
+    assert 0 not in pmf and sum(pmf.values()) == pytest.approx(1.0)
+    probs = [dist.line_probability(se, s, -15.5) for s in (-21.5, -18.5, -15.5, -12.5, -9.5)]
+    assert all(b <= a + 1e-12 for a, b in zip(probs, probs[1:]))     # falls as the home side weakens
+    anchored = dist.anchor(se, -15.5, 0.5)
+    assert anchored.family == "ShiftedEmpiricalFamily"
+    assert anchored.cover(15.5) == pytest.approx(0.5, abs=1e-6)
+
+
+def test_tier_b_falls_back_only_where_the_comparison_cannot_be_anchored():
+    rows = synthetic()
+    emp = EmpiricalFamily.fit(rows, "spreads", bucket_width=0.5, bandwidth=1.0)
+    nor = NormalFamily.fit(rows, "spreads")
+    se = dist.ShiftedEmpiricalFamily.from_buckets("spreads", emp.buckets, bucket_width=0.5, bandwidth=1.0)
+
+    class Unanchorable:
+        market = "spreads"
+
+        def pmf(self, s):
+            raise ValueError("no history")
+
+    usual = dist.TierB({"spreads": nor}, {"spreads": emp}, {"spreads": se})
+    assert usual.anchored("spreads", -5.5, 0.52)[1].family == "EmpiricalFamily"
+    falls_back = dist.TierB({"spreads": nor}, {"spreads": Unanchorable()}, {"spreads": se})
+    assert falls_back.anchored("spreads", -5.5, 0.52)[1].family == "ShiftedEmpiricalFamily"
+    with pytest.raises(ValueError):
+        dist.TierB({"spreads": nor}, {"spreads": Unanchorable()}).anchored("spreads", -5.5, 0.52)

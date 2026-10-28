@@ -4,7 +4,8 @@
         --out rules/nba/VALIDATION.md --write-dist data/dist
 
 Implements the criteria VALIDATION.md §0 declared before any data was loaded
-(D4, S1, V1-V4, DV1, M1-M3 and the §0.7 addendum). The history file must come
+(D4, S1, V1-V4, DV1, M1-M3 and the §0.7 addendum), and those §4 declared on
+2026-10-28 for large spreads (T1-T3). The history file must come
 with the provenance `python -m bethero_nba.history` writes next to it (D1).
 Results replace everything below `RESULTS_MARKER` in the output file; the
 criteria above it are never rewritten.
@@ -32,7 +33,8 @@ from itertools import accumulate, groupby
 from pathlib import Path
 
 from . import cli, history, model
-from .dist import EmpiricalFamily, HistoryRow, NormalFamily, load_history, save_families
+from .dist import (EmpiricalFamily, HistoryRow, NormalFamily, ShiftedEmpiricalFamily, anchor, find_bracket,
+                   line_probability, load_history, save_families)
 from .odds import american_to_decimal, devig
 
 OFFSETS = (-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0)        # §0.3
@@ -287,6 +289,123 @@ def evaluate_market(train: list[HistoryRow], holdout: list[HistoryRow], market: 
     return MarketResult(market, tuple(sorted({r.season for r in train})), bw, cv, len(train), len(rows),
                         len(scored), se, sn, selected, v3, mean, sd, band, placeholder,
                         allowed_gap(v3, placeholder), groups, (emp, nor))
+
+
+# --------------------------------------------------------- large spreads (§4)
+
+LARGE_SPREAD = 12.0                                               # §4 L4: R3's "12+" group
+T2_LINES = tuple(i / 2 for i in range(-40, 41))                    # §4 T2: home lines -20 .. +20
+T2_PROBS = (0.40, 0.45, 0.50, 0.55, 0.60)
+T2_STEP = 0.25
+
+
+@dataclass
+class AnchoredScore:
+    """§4 L5: each game's family anchored at its closing home line to 0.5, as Tier B anchors."""
+    n: int = 0
+    failed: int = 0                        # games at a line the family could not be anchored at
+    win_pred: dict = field(default_factory=lambda: defaultdict(float))
+    win_obs: dict = field(default_factory=lambda: defaultdict(float))
+
+    def rows(self) -> list[tuple[float, float, float, float]]:
+        """(offset, mean predicted win, anchored deviation a(o), tolerance)."""
+        if not self.n:
+            return []
+        d0 = (self.win_obs[0.0] - self.win_pred[0.0]) / self.n
+        out = []
+        for o in OFFSETS:
+            p = self.win_pred[o] / self.n
+            out.append((o, p, (self.win_obs[o] - self.win_pred[o]) / self.n - d0,
+                        Z * math.sqrt(p * (1 - p) / self.n)))
+        return out
+
+    def holds(self, gap: float) -> bool:
+        return (self.n > 0 and self.failed == 0
+                and all(abs(a) <= tol for o, _, a, tol in self.rows() if abs(o) <= gap + 1e-9))
+
+    def worst(self, gap: float) -> float:
+        return max((abs(a) for o, _, a, _ in self.rows() if abs(o) <= gap + 1e-9), default=float("nan"))
+
+
+def anchored_score(family, rows: list[HistoryRow]) -> AnchoredScore:
+    sc, cache = AnchoredScore(), {}
+    for r in rows:
+        line = r.close_spread_home
+        if line not in cache:
+            try:
+                cache[line] = Dist(anchor(family, line, 0.5).pmf, line > 0)
+            except ValueError:
+                cache[line] = None
+        if cache[line] is None:
+            sc.failed += 1
+            continue
+        base, x, _ = oriented(r, "spreads")
+        sc.n += 1
+        for o in OFFSETS:
+            level = base + o
+            sc.win_pred[o] += cache[line].ticket(level)[0]
+            sc.win_obs[o] += x > level
+    return sc
+
+
+def anchor_map(family, probs: tuple[float, ...]) -> dict[tuple[float, float], str]:
+    """§4 T2: at each home line and p_ref, 'no bracket', 'rises' (P(home covers) goes up
+    somewhere as s increases across the bracket, on a 0.25-point grid) or 'ok'."""
+    memo: dict[tuple[float, float], float] = {}
+    out = {}
+    for line in T2_LINES:
+        for p in probs:
+            bracket = find_bracket(family, line, p)
+            if bracket is None:
+                out[(line, p)] = "no bracket"
+                continue
+            lo, hi = bracket
+            values = []
+            for i in range(int(round((hi - lo) / T2_STEP)) + 1):
+                key = (line, lo + i * T2_STEP)
+                if key not in memo:
+                    memo[key] = line_probability(family, key[1], line)
+                values.append(memo[key])
+            out[(line, p)] = "ok" if all(b - a <= 1e-9 for a, b in zip(values, values[1:])) else "rises"
+    return out
+
+
+def large_games(rows: list[HistoryRow], train: list[HistoryRow]) -> list[HistoryRow]:
+    """§4 L4: games whose laid line is at least LARGE_SPREAD points, with training history in reach."""
+    return supported([r for r in rows if r.close_spread_home is not None
+                      and abs(r.close_spread_home) >= LARGE_SPREAD], train, "spreads")
+
+
+def large_spreads(train: list[HistoryRow], holdout: list[HistoryRow], later: list[HistoryRow],
+                  families: tuple, cfg) -> dict:
+    """VALIDATION.md §4: T1-T3 and the descriptive tables."""
+    emp, nor = families
+    se = ShiftedEmpiricalFamily.from_buckets("spreads", emp.buckets, bucket_width=emp.bucket_width,
+                                             bandwidth=emp.bandwidth)
+    gap = cfg.get("tiers.tier_b_max_gap.spread")
+    games = {"holdout": large_games(holdout, train), "later": large_games(later, train),
+             "training": large_games(train, train)}
+    scores = {(label, name): anchored_score(fam, rows) for label, rows in games.items()
+              for name, fam in (("normal", nor), ("shifted empirical", se), ("empirical", emp))}
+    sigma = []
+    for line in sorted({r.close_spread_home for r in games["holdout"]}):
+        n = sum(1 for r in games["holdout"] if r.close_spread_home == line)
+        try:
+            a_n, a_s = anchor(nor, line, 0.5), anchor(se, line, 0.5)
+        except ValueError:
+            sigma.append((line, n, None, None))
+            continue
+        half = [max(abs(a_n.cover(-line + k * d) - a_s.cover(-line + k * d)) / 2 for k in (-1, 1))
+                for d in (0.5, 1.0)]
+        sigma.append((line, n, half[0], half[1]))
+    t2 = anchor_map(se, T2_PROBS)
+    result = {"gap": gap, "games": games, "scores": scores, "t2": t2,
+              "empirical_map": anchor_map(emp, (0.5,)), "sigma": sigma,
+              "t1": scores[("holdout", "normal")].holds(gap),
+              "t2_ok": all(v == "ok" for v in t2.values()),
+              "t3": scores[("holdout", "shifted empirical")].holds(gap)}
+    result["decision"] = result["t1"] and result["t2_ok"] and result["t3"]
+    return result
 
 
 # ------------------------------------------------------------------ de-vig
@@ -551,9 +670,64 @@ def render(ctx: dict) -> str:
             f"{ctx['p60']['spread']:.2f}, total {ctx['p60']['total']:.2f}. Rounded down to 0.1 (§0.7 A8). "
             "`model.status` stays OFF.", ""]
 
+    out += render_large(ctx["large"])
     out += ["### R7 Values the pre-declared rules give", "", "| key | value | rule |", "|---|---|---|"]
     out += [f"| `{k}` | {v} | {why} |" for k, v, why in ctx["decisions"]]
     return "\n".join(out) + "\n"
+
+
+def _lines(values) -> str:
+    return ", ".join(f"{v:+g}" for v in values) or "none"
+
+
+def render_large(lg: dict) -> list[str]:
+    games, scores, gap = lg["games"], lg["scores"], lg["gap"]
+    out = ["### R8 Large spreads (§4, T1-T3)", "",
+           f"Games whose laid line is at least {LARGE_SPREAD:g} points, with training history in reach: "
+           f"holdout {len(games['holdout'])}, 2025-26 {len(games['later'])}, training {len(games['training'])}. "
+           "Each family is anchored at the game's closing home line to 0.5 (L5); a(o) = (observed - predicted "
+           "win at o) - (observed - predicted win at 0); tolerance 1.96 x sqrt(p(1-p)/N).", ""]
+    for name, test in (("normal", "T1"), ("shifted empirical", "T3")):
+        sc = scores[("holdout", name)]
+        out += [f"**{test}: {name} family on holdout** (N = {sc.n}; games at a line it could not be anchored "
+                f"at: {sc.failed})", "", "| offset | predicted win | a(o) | tolerance | within gap | result |",
+                "|---|---|---|---|---|---|"]
+        for o, p, a, tol in sc.rows():
+            inside = abs(o) <= gap + 1e-9
+            out.append(f"| {o:+.1f} | {_f(p)} | {a:+.4f} | {_f(tol)} | {'yes' if inside else 'no'} | "
+                       f"{('pass' if abs(a) <= tol else 'FAIL') if inside else '-'} |")
+        out.append("")
+    t2_bad = [k for k, v in lg["t2"].items() if v != "ok"]
+    out += [f"**T2: shifted empirical family at {len(T2_LINES)} home lines x {len(T2_PROBS)} p_ref**: "
+            f"{len(lg['t2']) - len(t2_bad)} of {len(lg['t2'])} anchor and move one way."
+            + "".join(f" {why.capitalize()} at home lines {_lines(sorted({line for (line, _), v in lg['t2'].items() if v == why}))}."
+                      for why in ("no bracket", "rises") if any(v == why for v in lg["t2"].values())), ""]
+    verdict = {True: "pass", False: "FAIL"}
+    out += [f"**Decision**: T1 {verdict[lg['t1']]}, T2 {verdict[lg['t2_ok']]}, T3 {verdict[lg['t3']]}: "
+            f"`distribution.comparison_fallback.spread` = "
+            f"{'shifted_empirical' if lg['decision'] else 'none'}.", "",
+            "Descriptive (decides nothing):", ""]
+    emap = lg["empirical_map"]
+    out += [f"- The empirical family at home lines from -20 to +20, anchored to 0.5: no bracket at "
+            f"{_lines(sorted(line for (line, _), v in emap.items() if v == 'no bracket'))}; anchors but does not "
+            f"move one way at {_lines(sorted(line for (line, _), v in emap.items() if v == 'rises'))}.",
+            f"- Holdout L4 games at a line the empirical family cannot anchor: "
+            f"{scores[('holdout', 'empirical')].failed} of {len(games['holdout'])}.", "",
+            "| seasons | family | N | not anchored | max \\|a(o)\\| within the gap | tolerance at p = 0.5 |",
+            "|---|---|---|---|---|---|"]
+    for label in ("holdout", "later", "training"):
+        for name in ("normal", "shifted empirical", "empirical"):
+            sc = scores[(label, name)]
+            tol = Z * 0.5 / math.sqrt(sc.n) if sc.n else float("nan")
+            seasons = {"holdout": "holdout", "later": "2025-26", "training": "training"}[label]
+            out.append(f"| {seasons} | {name} | {sc.n} | {sc.failed} | {_f(sc.worst(gap))} | {_f(tol)} |")
+    out += ["", "Half the gap between the anchored normal and shifted empirical families (the model term of "
+            "σ_translate), per holdout home line:", "",
+            "| home line | games | at ±0.5 | at ±1.0 |", "|---|---|---|---|"]
+    for line, n, h05, h10 in lg["sigma"]:
+        out.append(f"| {line:+g} | {n} | {'-' if h05 is None else _f(h05)} | {'-' if h10 is None else _f(h10)} |")
+    out.append("")
+    return out
 
 
 def decisions(ctx: dict) -> list[tuple[str, str, str]]:
@@ -572,7 +746,9 @@ def decisions(ctx: dict) -> list[tuple[str, str, str]]:
              ("model.prior_shrinkage_k_games", f"{ctx['k']:g}", "M1"),
              ("model.model_veto_pts", f"spread {floor1(ctx['p80']['spread']):g}, total {floor1(ctx['p80']['total']):g}", "M3"),
              ("model.model_downgrade_pts", f"spread {floor1(ctx['p60']['spread']):g}, total {floor1(ctx['p60']['total']):g}", "M3"),
-             ("model.status", "OFF", "M3: Eric decides")]
+             ("model.status", "OFF", "M3: Eric decides"),
+             ("distribution.comparison_fallback.spread",
+              "shifted_empirical" if ctx["large"]["decision"] else "none", "§4 T1-T3")]
     return rows
 
 
@@ -600,6 +776,8 @@ def run(history_csv: Path, cfg) -> dict:
                     sc = score(family, sub, res.market)
                     anchoring.append((res.market, label, len(sub), name, sc.deviation(0.0),
                                       max(abs(sc.deviation(o) - sc.deviation(0.0)) for o in OFFSETS)))
+    spreads = next(res for res in markets if res.market == "spreads")
+    large = large_spreads(train, holdout, later, spreads.families, cfg)
     methods = tuple(cfg.get("anchor.devig_methods"))
     dv_hold, dv_all = devig_scores(holdout, methods), devig_scores(rows, methods)
     best = min(dv_hold, key=lambda m: dv_hold[m]["log_loss"])
@@ -623,7 +801,7 @@ def run(history_csv: Path, cfg) -> dict:
            "markets": markets, "sensitivity": sensitivity, "later": later_scores, "anchoring": anchoring,
            "devig_holdout": dv_hold, "devig_all": dv_all, "devig_best": best,
            "k_table": k_table, "k": k, "phases": model_phase_table(preds, best), "n_model": len(preds),
-           "p80": p80, "p60": p60}
+           "p80": p80, "p60": p60, "large": large}
     ctx["decisions"] = decisions(ctx)
     return ctx
 

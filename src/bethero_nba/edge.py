@@ -110,6 +110,7 @@ class Decision:
     waived: list[str] = field(default_factory=list)      # what each waiver let through
     held_by: list[str] = field(default_factory=list)     # listed key players, when they alone hold G7
     held_unsupplied: list[str] = field(default_factory=list)   # those of them without minutes
+    comparison: str | None = None        # Tier B: the comparison family σ_translate used (R-12.3)
     cleared: list[str] = field(default_factory=list)     # listed players cleared by their minutes (R-9.3)
 
     def fail(self, code: str, note: str | None = None) -> None:
@@ -187,7 +188,7 @@ class Decision:
             "flags": self.flags, "confidence": self.confidence, "edge_label": self.edge_label,
             "model_d": self.model_d, "worst_line": self.worst_line, "waivers": self.waivers,
             "waived": self.waived, "held_by": self.held_by, "held_unsupplied": self.held_unsupplied,
-            "cleared": self.cleared,
+            "cleared": self.cleared, "comparison": self.comparison,
         }
 
 
@@ -437,6 +438,7 @@ def _price(d: Decision, market: Market, us_market: str, giver: str, gc: GameCons
                 return "換算失敗：分布對不上美盤機率"
             covers[m] = _giving_cover(us_market, giver, anchored.cover)
             sigma_books[m] = ref.sigma_books(m)
+            d.comparison = getattr(alternative, "family", None) or None
             for x in points:
                 x_home = -x if (us_market == "spreads" and giver == "away") else x
                 sigma_translate = max(sigma_translate,
