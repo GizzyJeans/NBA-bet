@@ -4,8 +4,8 @@
         --out rules/nba/VALIDATION.md --write-dist data/dist
 
 Implements the criteria VALIDATION.md §0 declared before any data was loaded
-(D4, S1, V1-V4, DV1, M1-M3 and the §0.7 addendum), and those §4 declared on
-2026-10-28 for large spreads (T1-T3). The history file must come
+(D4, S1, V1-V4, DV1, M1-M3 and the §0.7 addendum), and those §4 and §5
+declared on 2026-10-28 for large spreads (T1-T5). The history file must come
 with the provenance `python -m bethero_nba.history` writes next to it (D1).
 Results replace everything below `RESULTS_MARKER` in the output file; the
 criteria above it are never rewritten.
@@ -33,8 +33,8 @@ from itertools import accumulate, groupby
 from pathlib import Path
 
 from . import cli, history, model
-from .dist import (EmpiricalFamily, HistoryRow, NormalFamily, ShiftedEmpiricalFamily, anchor, find_bracket,
-                   line_probability, load_history, save_families)
+from .dist import (EmpiricalFamily, HistoryRow, NormalFamily, PooledShiftedEmpiricalFamily, ShiftedEmpiricalFamily,
+                   anchor, find_bracket, load_history, moves_one_way, save_families)
 from .odds import american_to_decimal, devig
 
 OFFSETS = (-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0)        # §0.3
@@ -349,8 +349,9 @@ def anchored_score(family, rows: list[HistoryRow]) -> AnchoredScore:
 
 
 def anchor_map(family, probs: tuple[float, ...]) -> dict[tuple[float, float], str]:
-    """§4 T2: at each home line and p_ref, 'no bracket', 'rises' (P(home covers) goes up
-    somewhere as s increases across the bracket, on a 0.25-point grid) or 'ok'."""
+    """§4 T2 / §5 T4: at each home line and p_ref, 'no bracket', 'rises' (P(home covers)
+    goes up somewhere as s increases across the bracket, on a 0.25-point grid) or 'ok'.
+    The one-way test is the one Tier B applies in production (§5 L8)."""
     memo: dict[tuple[float, float], float] = {}
     out = {}
     for line in T2_LINES:
@@ -358,15 +359,8 @@ def anchor_map(family, probs: tuple[float, ...]) -> dict[tuple[float, float], st
             bracket = find_bracket(family, line, p)
             if bracket is None:
                 out[(line, p)] = "no bracket"
-                continue
-            lo, hi = bracket
-            values = []
-            for i in range(int(round((hi - lo) / T2_STEP)) + 1):
-                key = (line, lo + i * T2_STEP)
-                if key not in memo:
-                    memo[key] = line_probability(family, key[1], line)
-                values.append(memo[key])
-            out[(line, p)] = "ok" if all(b - a <= 1e-9 for a, b in zip(values, values[1:])) else "rises"
+            else:
+                out[(line, p)] = "ok" if moves_one_way(family, line, bracket, T2_STEP, memo) else "rises"
     return out
 
 
@@ -380,31 +374,45 @@ def large_spreads(train: list[HistoryRow], holdout: list[HistoryRow], later: lis
                   families: tuple, cfg) -> dict:
     """VALIDATION.md §4: T1-T3 and the descriptive tables."""
     emp, nor = families
-    se = ShiftedEmpiricalFamily.from_buckets("spreads", emp.buckets, bucket_width=emp.bucket_width,
-                                             bandwidth=emp.bandwidth)
+    build = lambda cls: cls.from_buckets("spreads", emp.buckets, bucket_width=emp.bucket_width,  # noqa: E731
+                                         bandwidth=emp.bandwidth)
+    se, pse = build(ShiftedEmpiricalFamily), build(PooledShiftedEmpiricalFamily)
     gap = cfg.get("tiers.tier_b_max_gap.spread")
     games = {"holdout": large_games(holdout, train), "later": large_games(later, train),
              "training": large_games(train, train)}
-    scores = {(label, name): anchored_score(fam, rows) for label, rows in games.items()
-              for name, fam in (("normal", nor), ("shifted empirical", se), ("empirical", emp))}
-    sigma = []
-    for line in sorted({r.close_spread_home for r in games["holdout"]}):
-        n = sum(1 for r in games["holdout"] if r.close_spread_home == line)
-        try:
-            a_n, a_s = anchor(nor, line, 0.5), anchor(se, line, 0.5)
-        except ValueError:
-            sigma.append((line, n, None, None))
-            continue
-        half = [max(abs(a_n.cover(-line + k * d) - a_s.cover(-line + k * d)) / 2 for k in (-1, 1))
-                for d in (0.5, 1.0)]
-        sigma.append((line, n, half[0], half[1]))
-    t2 = anchor_map(se, T2_PROBS)
-    result = {"gap": gap, "games": games, "scores": scores, "t2": t2,
-              "empirical_map": anchor_map(emp, (0.5,)), "sigma": sigma,
+    families = (("normal", nor), ("shifted empirical", se), ("pooled shifted empirical", pse), ("empirical", emp))
+    scores = {(label, name): anchored_score(fam, rows) for label, rows in games.items() for name, fam in families}
+
+    def half_gaps(other) -> list:
+        out = []
+        for line in sorted({r.close_spread_home for r in games["holdout"]}):
+            n = sum(1 for r in games["holdout"] if r.close_spread_home == line)
+            try:
+                a_n, a_o = anchor(nor, line, 0.5), anchor(other, line, 0.5)
+            except ValueError:
+                out.append((line, n, None, None))
+                continue
+            half = [max(abs(a_n.cover(-line + k * d) - a_o.cover(-line + k * d)) / 2 for k in (-1, 1))
+                    for d in (0.5, 1.0)]
+            out.append((line, n, half[0], half[1]))
+        return out
+
+    empirical_map = anchor_map(emp, (0.5,))
+    t2, t4 = anchor_map(se, T2_PROBS), anchor_map(pse, T2_PROBS)
+    memo: dict = {}
+    l7 = 0
+    for r in games["holdout"]:
+        bracket = find_bracket(emp, r.close_spread_home, 0.5)
+        l7 += bracket is None or not moves_one_way(emp, r.close_spread_home, bracket, T2_STEP, memo)
+    result = {"gap": gap, "games": games, "scores": scores, "t2": t2, "t4": t4,
+              "empirical_map": empirical_map, "sigma": half_gaps(se), "sigma_pooled": half_gaps(pse), "l7": l7,
               "t1": scores[("holdout", "normal")].holds(gap),
               "t2_ok": all(v == "ok" for v in t2.values()),
-              "t3": scores[("holdout", "shifted empirical")].holds(gap)}
-    result["decision"] = result["t1"] and result["t2_ok"] and result["t3"]
+              "t3": scores[("holdout", "shifted empirical")].holds(gap),
+              "t4_ok": all(v == "ok" for v in t4.values()),
+              "t5": scores[("holdout", "pooled shifted empirical")].holds(gap)}
+    result["decision"] = result["t1"] and result["t2_ok"] and result["t3"]                 # §4
+    result["decision_pooled"] = result["t1"] and result["t4_ok"] and result["t5"]          # §5
     return result
 
 
@@ -716,7 +724,7 @@ def render_large(lg: dict) -> list[str]:
             "| seasons | family | N | not anchored | max \\|a(o)\\| within the gap | tolerance at p = 0.5 |",
             "|---|---|---|---|---|---|"]
     for label in ("holdout", "later", "training"):
-        for name in ("normal", "shifted empirical", "empirical"):
+        for name in ("normal", "shifted empirical", "empirical"):  # R8 as §4 declared it
             sc = scores[(label, name)]
             tol = Z * 0.5 / math.sqrt(sc.n) if sc.n else float("nan")
             seasons = {"holdout": "holdout", "later": "2025-26", "training": "training"}[label]
@@ -725,6 +733,45 @@ def render_large(lg: dict) -> list[str]:
             "σ_translate), per holdout home line:", "",
             "| home line | games | at ±0.5 | at ±1.0 |", "|---|---|---|---|"]
     for line, n, h05, h10 in lg["sigma"]:
+        out.append(f"| {line:+g} | {n} | {'-' if h05 is None else _f(h05)} | {'-' if h10 is None else _f(h10)} |")
+    out.append("")
+    return out + render_pooled(lg)
+
+
+def render_pooled(lg: dict) -> list[str]:
+    games, scores, gap = lg["games"], lg["scores"], lg["gap"]
+    verdict = {True: "pass", False: "FAIL"}
+    sc = scores[("holdout", "pooled shifted empirical")]
+    out = ["### R9 Pooled shifted family for large spreads (§5, T4-T5)", "",
+           "Same games, anchoring and tolerance as R8. T1 is R8's.", "",
+           f"**T5: pooled shifted empirical family on holdout** (N = {sc.n}; games at a line it could not be "
+           f"anchored at: {sc.failed})", "", "| offset | predicted win | a(o) | tolerance | within gap | result |",
+           "|---|---|---|---|---|---|"]
+    for o, p, a, tol in sc.rows():
+        inside = abs(o) <= gap + 1e-9
+        out.append(f"| {o:+.1f} | {_f(p)} | {a:+.4f} | {_f(tol)} | {'yes' if inside else 'no'} | "
+                   f"{('pass' if abs(a) <= tol else 'FAIL') if inside else '-'} |")
+    t4_bad = [k for k, v in lg["t4"].items() if v != "ok"]
+    out += ["", f"**T4: pooled shifted empirical family at {len(T2_LINES)} home lines x {len(T2_PROBS)} p_ref**: "
+            f"{len(lg['t4']) - len(t4_bad)} of {len(lg['t4'])} anchor and move one way."
+            + "".join(f" {why.capitalize()} at home lines {_lines(sorted({line for (line, _), v in lg['t4'].items() if v == why}))}."
+                      for why in ("no bracket", "rises") if any(v == why for v in lg["t4"].values())), "",
+            f"**Decision**: T1 {verdict[lg['t1']]} (R8), T4 {verdict[lg['t4_ok']]}, T5 {verdict[lg['t5']]}: "
+            f"`distribution.comparison_fallback.spread` = "
+            f"{'pooled_shifted_empirical' if lg['decision_pooled'] else 'none'}.", "",
+            "Descriptive (decides nothing):", "",
+            f"- Holdout L4 games at a line where §5 L7 applies (the empirical family cannot be anchored at 0.5, or "
+            f"anchors without moving one way): {lg['l7']} of {len(games['holdout'])}.", "",
+            "| seasons | N | not anchored | max \\|a(o)\\| within the gap | tolerance at p = 0.5 |",
+            "|---|---|---|---|---|"]
+    for label, seasons in (("holdout", "holdout"), ("later", "2025-26"), ("training", "training")):
+        sp = scores[(label, "pooled shifted empirical")]
+        tol = Z * 0.5 / math.sqrt(sp.n) if sp.n else float("nan")
+        out.append(f"| {seasons} | {sp.n} | {sp.failed} | {_f(sp.worst(gap))} | {_f(tol)} |")
+    out += ["", "Half the gap between the anchored normal and pooled shifted families (the model term of "
+            "σ_translate), per holdout home line:", "",
+            "| home line | games | at ±0.5 | at ±1.0 |", "|---|---|---|---|"]
+    for line, n, h05, h10 in lg["sigma_pooled"]:
         out.append(f"| {line:+g} | {n} | {'-' if h05 is None else _f(h05)} | {'-' if h10 is None else _f(h10)} |")
     out.append("")
     return out
@@ -748,7 +795,8 @@ def decisions(ctx: dict) -> list[tuple[str, str, str]]:
              ("model.model_downgrade_pts", f"spread {floor1(ctx['p60']['spread']):g}, total {floor1(ctx['p60']['total']):g}", "M3"),
              ("model.status", "OFF", "M3: Eric decides"),
              ("distribution.comparison_fallback.spread",
-              "shifted_empirical" if ctx["large"]["decision"] else "none", "§4 T1-T3")]
+              "pooled_shifted_empirical" if ctx["large"]["decision_pooled"]
+              else "shifted_empirical" if ctx["large"]["decision"] else "none", "§4 T1-T3, §5 T4-T5")]
     return rows
 
 

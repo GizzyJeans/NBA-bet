@@ -12,7 +12,7 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.6.6
+  version: 0.6.7
   updated: 2026-10-28
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
@@ -354,7 +354,7 @@ distribution:
   comparison_fallback:
     value: {spread: none, total: none}
     status: RULE
-    source: "VALIDATION.md §4 and R8 (pre-declared 2026-10-28, commit 02b7c4c): the shifted empirical family failed T2 (it rises at 150 of 405 line and p_ref combinations) and T3 (a(-1.5) = -0.0531 against 0.0529, N = 336), so no family replaces the comparison where the empirical family cannot be anchored. T1 passed: the normal family translates within tolerance at laid lines of 12+ (max |a| 0.0184 against 0.0535)"
+    source: "VALIDATION.md §4 with R8 and §5 with R9 (each pre-declared 2026-10-28 before it was computed, commits 02b7c4c and 654a917), holdout spreads with laid lines of 12+, N = 336. The shifted empirical family failed T2 (it rises at 150 of 405 line and p_ref combinations) and T3 (a(-1.5) = -0.0531 against 0.0529). The pooled shifted empirical family passed T5 (largest |a| 0.0256 against 0.0528 to 0.0534) and failed T4 (116 of 405 combinations do not anchor or do not move one way). So no family replaces the comparison where the empirical family cannot be anchored or, by §5 L8, does not move one way. T1 passed: the normal family translates within tolerance (max |a| 0.0184 against 0.0535)"
   bug_bands:
     value: {margin_sigma: [10, 15], total_sigma: [15, 23]}
     status: UNVALIDATED

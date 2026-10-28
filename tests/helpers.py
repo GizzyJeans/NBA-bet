@@ -97,6 +97,9 @@ class HypotheticalTierB:
         pmf = {7: p_ref - self.PI6, 6: self.PI6, 5: self.PI5, 0: 1 - p_ref - self.PI5}
         return Anchored(pmf, ref_line, self.N), None
 
+    def fair(self, market, ref_line, p_ref):
+        return self.anchored(market, ref_line, p_ref)[0]
+
     def sigma_translate(self, primary, alternative, ref_point, x):
         se = math.sqrt(self.PI5 * (1 - self.PI5) / self.N)
         return math.sqrt(se ** 2 + (abs(self.PI5 - self.PI5_NORMAL) / 2) ** 2)

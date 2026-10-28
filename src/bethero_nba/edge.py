@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 from . import context
 from .consensus import GameConsensus
+from .dist import NotOneWay
 from .odds import (Leg, devig, effective_win_probability, expected_value, hk_to_decimal,
                    kelly_fraction, needed_points, ticket_outcomes)
 from .oddsapi import Game
@@ -396,8 +397,8 @@ def _fair_line(d: Decision, market: Market, us_market: str, giver: str, gc: Game
     if tb is not None:
         ref = gc.line(us_market, d.l_ref)
         try:
-            anchored, _ = tb.anchored(us_market, d.l_ref, ref.probs[display])
-        except ValueError:                  # the family has no history near this line
+            anchored = tb.fair(us_market, d.l_ref, ref.probs[display])
+        except ValueError:                  # the selected family has no history near this line
             anchored = None
         if anchored is not None:
             d.fair_line, d.fair_source = _to_giving(us_market, giver, anchored.fair_point()), "distribution"
@@ -433,6 +434,9 @@ def _price(d: Decision, market: Market, us_market: str, giver: str, gc: GameCons
         for m in methods:
             try:
                 anchored, alternative = tb.anchored(us_market, d.l_ref, ref.probs[m])
+            except NotOneWay:               # the comparison crosses but wobbles (VALIDATION.md §5 L8)
+                d.tier = None
+                return "換算失敗：比較分布在這條線不單調"
             except ValueError:              # the family has no history near this line
                 d.tier = None
                 return "換算失敗：分布對不上美盤機率"

@@ -139,11 +139,30 @@ def test_shifted_family_stays_centred_beyond_the_history():
     assert anchored.cover(15.5) == pytest.approx(0.5, abs=1e-6)
 
 
+def test_pooled_family_weights_games_not_buckets():
+    """One game at -13.5 and fifty at -9.5 lie 2 points either side of -11.5. The shifted family
+    gives the one game half the mixture; the pooled family gives it 1/51 (VALIDATION.md §5 L6)."""
+    buckets = {-13.5: {20: 1}, -9.5: {5: 50}}
+    se = dist.ShiftedEmpiricalFamily.from_buckets("spreads", buckets, bucket_width=0.5, bandwidth=2.0)
+    pse = dist.PooledShiftedEmpiricalFamily.from_buckets("spreads", buckets, bucket_width=0.5, bandwidth=2.0)
+    assert se.pmf(-11.5) == pytest.approx({18: 0.5, 7: 0.5})            # both moved to the target line
+    assert pse.pmf(-11.5) == pytest.approx({18: 1 / 51, 7: 50 / 51})
+    assert set(dist.FALLBACKS) == {"shifted_empirical", "pooled_shifted_empirical"}
+    with pytest.raises(ValueError):
+        pse.pmf(0.5)                                                     # no history within reach
+
+
 def test_tier_b_falls_back_only_where_the_comparison_cannot_be_anchored():
     rows = synthetic()
-    emp = EmpiricalFamily.fit(rows, "spreads", bucket_width=0.5, bandwidth=1.0)
     nor = NormalFamily.fit(rows, "spreads")
-    se = dist.ShiftedEmpiricalFamily.from_buckets("spreads", emp.buckets, bucket_width=0.5, bandwidth=1.0)
+    wider = NormalFamily("spreads", nor.sigma + 1.5, nor.offset)       # a comparison that moves one way
+    emp = EmpiricalFamily.fit(rows, "spreads", bucket_width=0.5, bandwidth=1.0)
+    wobbly = dist.ShiftedEmpiricalFamily.from_buckets("spreads", emp.buckets, bucket_width=0.5, bandwidth=1.0)
+    bracket = dist.find_bracket(wobbly, -5.5, 0.52)
+    assert bracket is not None and not dist.moves_one_way(wobbly, -5.5, bracket)   # crosses, not one way
+    dist.anchor(wobbly, -5.5, 0.52)                                      # anchors when one way is not asked
+    with pytest.raises(dist.NotOneWay):
+        dist.anchor(wobbly, -5.5, 0.52, one_way=True)
 
     class Unanchorable:
         market = "spreads"
@@ -151,9 +170,15 @@ def test_tier_b_falls_back_only_where_the_comparison_cannot_be_anchored():
         def pmf(self, s):
             raise ValueError("no history")
 
-    usual = dist.TierB({"spreads": nor}, {"spreads": emp}, {"spreads": se})
-    assert usual.anchored("spreads", -5.5, 0.52)[1].family == "EmpiricalFamily"
-    falls_back = dist.TierB({"spreads": nor}, {"spreads": Unanchorable()}, {"spreads": se})
-    assert falls_back.anchored("spreads", -5.5, 0.52)[1].family == "ShiftedEmpiricalFamily"
-    with pytest.raises(ValueError):
-        dist.TierB({"spreads": nor}, {"spreads": Unanchorable()}).anchored("spreads", -5.5, 0.52)
+    expected = dist.anchor(wider, -5.5, 0.52).s_star
+    assert expected != pytest.approx(dist.anchor(nor, -5.5, 0.52).s_star, abs=1e-3)
+    usual = dist.TierB({"spreads": nor}, {"spreads": wider}, {"spreads": nor})
+    assert usual.anchored("spreads", -5.5, 0.52)[1].s_star == pytest.approx(expected)   # no fallback needed
+    for broken in (Unanchorable(), wobbly):                # cannot be anchored / not one way (§5 L8)
+        replaced = dist.TierB({"spreads": nor}, {"spreads": broken}, {"spreads": wider})
+        assert replaced.anchored("spreads", -5.5, 0.52)[1].s_star == pytest.approx(expected)
+        with pytest.raises(ValueError):
+            dist.TierB({"spreads": nor}, {"spreads": broken}).anchored("spreads", -5.5, 0.52)
+        # the fair line comes from the selected family alone, whatever the comparison does
+        assert dist.TierB({"spreads": nor}, {"spreads": broken}).fair("spreads", -5.5, 0.52).s_star == \
+            pytest.approx(dist.anchor(nor, -5.5, 0.52).s_star)

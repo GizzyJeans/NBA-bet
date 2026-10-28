@@ -97,5 +97,17 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
 - **Impact:** no stake. No decision changed.
   - Tier B fails closed where the family cannot be anchored, so the SAC@SAS (2026-10-27) and SAS@UTA (2026-10-28) handicaps were not priced.
   - Where it anchors without moving one way, σ_translate's model term rests on an erratic comparison. Three live markets were priced this way: SAS@DAL +15.5 (10-24 slate), CHI@BOS −14.5 (10-26) and BKN@BOS −12.5 (10-27). Each was a non-bet for other reasons; the best EV was +0.7%.
-- **Fix:** the docstrings now say what holds. VALIDATION.md §4 tested a shifted variant; it failed T2 and T3, so production is unchanged (RULES 0.6.6).
+- **Fix:**
+  - The docstrings now say what holds.
+  - VALIDATION.md tested two shifted variants as replacements: §4's failed T2 and T3 (RULES 0.6.6), §5's failed T4 (RULES 0.6.7). Neither is used.
+  - Since RULES 0.6.7, a comparison that anchors without moving one way counts as not anchored (§5 L8). Those three markets would now stop at `NB-TIER-C` instead of resting on it.
 
+## E-013 · 2026-10-28 · Phase 3 `src/bethero_nba/edge.py`: the fair line when only the comparison cannot be anchored
+
+- **Wrong:** the fair line anchored both Tier B families and fell back to `L_ref` when either failed.
+- **Correct:** R-5.6 defines the fair line under the consensus distribution, the selected family; the comparison only widens σ_translate. The fair line falls back to `L_ref` only when the selected family cannot be anchored.
+- **Impact:** no gate, label or stake. The fair line feeds the sanity gate and the `ROUNDING` label.
+  - Two markets recorded `L_ref` instead of the normal family's fair line: SAC@SAS (10-27 slate), 18.5 instead of 18.68; SAS@UTA (10-28), 13.5 either way. Both were `NB-TIER-C` regardless, and their sanity gaps (0.1 and 0.5 points) are far inside 3.0.
+  - Replaying the last pass of each of the five slates (264 decisions) with the fix changes nothing else.
+  - Left in place, §5 L8 would have spread it to Tier A markets at large lines: MIL@PHI 12.5 (10-24 slate) would have recorded 12.5 instead of 12.85.
+- **Fix:** `TierB.fair` anchors the selected family alone, and the fair line uses it (RULES 0.6.7).

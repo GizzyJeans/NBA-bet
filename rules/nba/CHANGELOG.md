@@ -2,6 +2,22 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.7 · 2026-10-28
+
+- VALIDATION.md §5 tested a second fix for large spreads after §4's failed (0.6.6). Eric 2026-10-28: 「好，去改善大讓分的換算」. The criteria were pre-declared and committed (654a917) before anything was computed. The games are R8's: 336 holdout spreads with laid lines of 12+ points.
+  - The family: pooled shifted empirical. As the shifted family, but each game, not each bucket, carries the kernel weight, so one- or two-game buckets no longer decide the mixture.
+  - **T5 passed.** Its translation is within tolerance at every offset: largest |a(o)| 0.0256 against 0.0528 to 0.0534.
+  - **T4 failed.** At 116 of 405 line and p_ref combinations it cannot be anchored, or anchors without moving one way (home lines −20 to −13.5 and +10.5 to +18.5).
+  - As declared, `distribution.comparison_fallback` stays none; only its source changes. This was the second family tried on the same games.
+- R-6.4, stricter (§5 L8, declared before the run, whatever it gave): a comparison family that anchors without moving one way across its search window counts as not anchored, so with no fallback the leg gets `NB-TIER-C`. Why: there the anchored comparison is erratic, and σ_translate's model term rests on it (ERRATA E-012).
+- R-6.4: the fair line comes from the selected family even when the comparison cannot be anchored (R-5.6). Before, it fell back to `L_ref` (ERRATA E-013).
+- Reports give an L8 stop its own reason, 「換算失敗：比較分布在這條線不單調」. A family that cannot be anchored keeps 「換算失敗：分布對不上美盤機率」.
+- `validate` now also writes R9; R1–R8 are unchanged.
+- Consequence for bets: none so far. Replaying the last pass of each of the five slates (264 decisions, stored US snapshots):
+  - Three handicaps move from Tier B to `NB-TIER-C`: SAS@DAL +15.5 (10-24 slate), CHI@BOS −14.5 (10-26) and BKN@BOS −12.5 (10-27). All were non-bets; the best EV was +0.7%.
+  - SAC@SAS (10-27) and SAS@UTA (10-28) record the normal family's fair line, 18.68 and 13.5 (was `L_ref`, 18.5 and 13.5). Both stay `NB-TIER-C`, and no other decision changes.
+  - Ahead, at the consensus probabilities of a main line (0.47 to 0.53), L8 stops Tier B at home lines of 12.5 to 17.5 points: 202 of 2,441 holdout spreads games (8.3%) closed at such a line. Another 82 (3.4%) were at lines where the comparison could not be anchored at all, which already stopped them. The largest wrong-way move is 0.4 pp. Totals: 9 games (0.4%), all at 251.5 to 253.
+
 ## 0.6.6 · 2026-10-28
 
 - VALIDATION.md §4 tested a fix for large spreads. Eric 2026-10-28: 「好，去改善大讓分的換算」. The criteria were pre-declared and committed (02b7c4c) before anything was computed.

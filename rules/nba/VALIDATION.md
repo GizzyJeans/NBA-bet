@@ -91,6 +91,10 @@ Written after the results below; it restates them and changes no criterion. R-nu
   - T2 and T3 failed: the shifted empirical family does not move one way at most lines of 9+ points, and misses T3 at -1.5 (0.0531 against 0.0529).
   - So nothing changes: `distribution.comparison_fallback` is none, and spreads where the empirical family cannot be anchored still stop at `NB-TIER-C`.
   - Descriptively, the empirical family itself cannot be anchored at -20 to -17, +13.5 and +14, and anchors without moving one way at -15.5 to -12.5, +13 and +14.5 to +17.5 (ERRATA E-012).
+- **Large spreads, second try (R9, 2026-10-28; criteria in §5).** Same 336 games.
+  - T5 passed: the pooled shifted empirical family translates within tolerance (largest |a(o)| 0.0256 against 0.0528 to 0.0534).
+  - T4 failed: at 116 of 405 line and p_ref combinations it cannot be anchored, or anchors without moving one way.
+  - So `distribution.comparison_fallback` stays none. By §5 L8, a comparison that anchors without moving one way now counts as not anchored, so those legs stop at `NB-TIER-C` too (L7 applies to 253 of the 336 games at p = 0.5).
 
 ## 2. What cannot be backtested
 
@@ -515,6 +519,75 @@ Half the gap between the anchored normal and shifted empirical families (the mod
 | +17.5 | 3 | 0.0097 | 0.0130 |
 | +18.5 | 1 | 0.0131 | 0.0143 |
 
+### R9 Pooled shifted family for large spreads (§5, T4-T5)
+
+Same games, anchoring and tolerance as R8. T1 is R8's.
+
+**T5: pooled shifted empirical family on holdout** (N = 336; games at a line it could not be anchored at: 0)
+
+| offset | predicted win | a(o) | tolerance | within gap | result |
+|---|---|---|---|---|---|
+| -2.0 | 0.5688 | -0.0284 | 0.0530 | no | - |
+| -1.5 | 0.5540 | -0.0256 | 0.0532 | yes | pass |
+| -1.0 | 0.5368 | -0.0143 | 0.0533 | yes | pass |
+| -0.5 | 0.5131 | -0.0025 | 0.0534 | yes | pass |
+| +0.0 | 0.4868 | +0.0000 | 0.0534 | yes | pass |
+| +0.5 | 0.4621 | -0.0050 | 0.0533 | yes | pass |
+| +1.0 | 0.4419 | -0.0057 | 0.0531 | yes | pass |
+| +1.5 | 0.4240 | +0.0063 | 0.0528 | yes | pass |
+| +2.0 | 0.4054 | -0.0019 | 0.0525 | no | - |
+
+**T4: pooled shifted empirical family at 81 home lines x 5 p_ref**: 289 of 405 anchor and move one way. No bracket at home lines -17, -16.5, -16, -15.5, +12, +12.5, +13, +13.5, +14, +14.5. Rises at home lines -20, -19.5, -19, -18.5, -18, -17.5, -17, -16.5, -16, -15.5, -15, -14.5, -14, -13.5, +10.5, +11, +11.5, +13, +13.5, +14.5, +15, +15.5, +16, +16.5, +17, +17.5, +18, +18.5.
+
+**Decision**: T1 pass (R8), T4 FAIL, T5 pass: `distribution.comparison_fallback.spread` = none.
+
+Descriptive (decides nothing):
+
+- Holdout L4 games at a line where §5 L7 applies (the empirical family cannot be anchored at 0.5, or anchors without moving one way): 253 of 336.
+
+| seasons | N | not anchored | max \|a(o)\| within the gap | tolerance at p = 0.5 |
+|---|---|---|---|---|
+| holdout | 336 | 0 | 0.0256 | 0.0535 |
+| 2025-26 | 61 | 0 | 0.0570 | 0.1255 |
+| training | 761 | 0 | 0.0156 | 0.0355 |
+
+Half the gap between the anchored normal and pooled shifted families (the model term of σ_translate), per holdout home line:
+
+| home line | games | at ±0.5 | at ±1.0 |
+|---|---|---|---|
+| -23 | 1 | 0.1244 | 0.1166 |
+| -21 | 1 | 0.0906 | 0.0906 |
+| -20.5 | 2 | 0.0794 | 0.0794 |
+| -19.5 | 1 | 0.0605 | 0.0605 |
+| -19 | 3 | 0.0549 | 0.0549 |
+| -18.5 | 6 | 0.0391 | 0.0408 |
+| -18 | 4 | 0.0325 | 0.0325 |
+| -17.5 | 10 | 0.0172 | 0.0261 |
+| -17 | 8 | 0.0002 | 0.0076 |
+| -16.5 | 7 | 0.0044 | 0.0044 |
+| -16 | 10 | 0.0012 | 0.0088 |
+| -15.5 | 19 | 0.0074 | 0.0074 |
+| -15 | 11 | 0.0028 | 0.0117 |
+| -14.5 | 20 | 0.0084 | 0.0084 |
+| -14 | 20 | 0.0027 | 0.0114 |
+| -13.5 | 27 | 0.0080 | 0.0080 |
+| -13 | 29 | 0.0023 | 0.0109 |
+| -12.5 | 25 | 0.0068 | 0.0068 |
+| -12 | 36 | 0.0020 | 0.0094 |
+| +12 | 14 | 0.0001 | 0.0029 |
+| +12.5 | 15 | 0.0026 | 0.0026 |
+| +13 | 11 | 0.0015 | 0.0021 |
+| +13.5 | 15 | 0.0020 | 0.0035 |
+| +14 | 10 | 0.0041 | 0.0146 |
+| +14.5 | 10 | 0.0148 | 0.0148 |
+| +15 | 3 | 0.0071 | 0.0071 |
+| +15.5 | 5 | 0.0072 | 0.0085 |
+| +16 | 5 | 0.0073 | 0.0073 |
+| +16.5 | 3 | 0.0089 | 0.0089 |
+| +17 | 1 | 0.0038 | 0.0038 |
+| +17.5 | 3 | 0.0136 | 0.0136 |
+| +18.5 | 1 | 0.0014 | 0.0062 |
+
 ### R7 Values the pre-declared rules give
 
 | key | value | rule |
@@ -532,4 +605,4 @@ Half the gap between the anchored normal and shifted empirical families (the mod
 | `model.model_veto_pts` | spread 5.4, total 7 | M3 |
 | `model.model_downgrade_pts` | spread 3.5, total 4.5 | M3 |
 | `model.status` | OFF | M3: Eric decides |
-| `distribution.comparison_fallback.spread` | none | §4 T1-T3 |
+| `distribution.comparison_fallback.spread` | none | §4 T1-T3, §5 T4-T5 |

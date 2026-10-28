@@ -181,6 +181,39 @@ class ShiftedEmpiricalFamily(EmpiricalFamily):
         return {x: m / z for x, m in mass.items() if m > 0}
 
 
+class PooledShiftedEmpiricalFamily(EmpiricalFamily):
+    """The shifted family with each game, not each bucket, carrying its bucket's
+    kernel weight (VALIDATION.md §5 L6): a bucket of n games enters with weight
+    w x n, the usual kernel estimator over games, each game's outcome moved to the
+    target line. One- or two-game buckets at nearby lines no longer decide the
+    mixture, which the per-bucket weights of the shifted family let them do.
+    """
+
+    def pmf(self, s: float) -> dict[int, float]:
+        weights = self._weights(s)
+        mass: dict[int, float] = {}
+        total = 0.0
+        for b, w in weights.items():
+            d = _location(self.market, s) - _location(self.market, b)
+            step = math.floor(d)
+            frac = d - step
+            for x, count in self.buckets[b].items():
+                p = w * count
+                mass[x + step] = mass.get(x + step, 0.0) + p * (1 - frac)
+                if frac > 0:
+                    mass[x + step + 1] = mass.get(x + step + 1, 0.0) + p * frac
+                total += p
+        if total == 0:
+            raise ValueError(f"no history within reach of line {s}")
+        if self.market == "spreads":
+            mass.pop(0, None)
+        z = sum(mass.values())
+        return {x: m / z for x, m in mass.items() if m > 0}
+
+
+FALLBACKS = {"shifted_empirical": ShiftedEmpiricalFamily, "pooled_shifted_empirical": PooledShiftedEmpiricalFamily}
+
+
 class NormalFamily:
     """Discretized normal around the line-implied location, with no mass at a
     tied margin (overtime settles every game)."""
@@ -267,23 +300,50 @@ def find_bracket(family, ref_line: float, p_ref: float, search: tuple[float, ...
     return None
 
 
-def anchor(family, ref_line: float, p_ref: float, *, search: tuple[float, ...] = SEARCH) -> Anchored:
+GRID_STEP = 0.25
+
+
+class NotOneWay(ValueError):
+    """A family crossed p_ref but did not move one way across the window (VALIDATION.md §5 L8)."""
+
+
+def moves_one_way(family, ref_line: float, bracket: tuple[float, float], step: float = GRID_STEP,
+                  memo: dict | None = None) -> bool:
+    """Whether the anchored probability never moves the wrong way across the bracket, on a
+    `step`-point grid (VALIDATION.md §4 T2, §5 L8): for spreads P(home covers) must not rise
+    as s increases; for totals P(over) must not fall."""
+    memo = {} if memo is None else memo
+    lo, hi = bracket
+    values = []
+    for i in range(int(round((hi - lo) / step)) + 1):
+        key = (ref_line, lo + i * step)
+        if key not in memo:
+            memo[key] = line_probability(family, key[1], ref_line)
+        values.append(memo[key] if family.market == "spreads" else -memo[key])
+    return all(b - a <= 1e-9 for a, b in zip(values, values[1:]))
+
+
+def anchor(family, ref_line: float, p_ref: float, *, search: tuple[float, ...] = SEARCH,
+           one_way: bool = False) -> Anchored:
     """Find s* such that the family gives the consensus P(home covers ref_line)
     (spreads) or P(over ref_line) (totals) = p_ref.
 
     The reference point is the half-point X must exceed: home -5.5 needs
     X > 5.5; over 228.5 needs X > 228.5. Integer reference lines are anchored
-    on the no-push share. For the normal and shifted empirical families P(cover)
-    falls as s moves away from the home side (rises with s for totals), so
-    bisection finds the one root. The unshifted empirical family need not move
-    one way where its history is sparse (VALIDATION.md §4); when it does not
-    cross p_ref inside the window it raises, and Tier B fails closed (R-6.4).
+    on the no-push share. For the normal family P(cover) falls as s moves away
+    from the home side (rises with s for totals), so bisection finds the one
+    root. The empirical families need not move one way where history is sparse
+    (VALIDATION.md §4, §5): when one does not cross p_ref inside the window it
+    raises, and with `one_way` it also raises when it crosses without moving one
+    way across the window (§5 L8); Tier B then fails closed (R-6.4).
     """
     market = family.market
     sign = -1.0 if market == "spreads" else 1.0
     bracket = find_bracket(family, ref_line, p_ref, search)
     if bracket is None:
         raise ValueError(f"cannot anchor {market} at {ref_line} to {p_ref:.4f} within ±{max(search)}")
+    if one_way and not moves_one_way(family, ref_line, bracket):
+        raise NotOneWay(f"{type(family).__name__} does not move one way around {market} {ref_line}")
     lo, hi = bracket
     for _ in range(60):
         mid = 0.5 * (lo + hi)
@@ -328,8 +388,9 @@ def load_tier_b(directory: Path | str, markets: Iterable[str], selected: dict[st
     """TierB for the validated markets only, from the files `validate --write-dist` wrote.
     `selected`, `bandwidths` and `fallback` are the config's (keyed spread / total); a file
     that disagrees with them, or was not validated, is refused rather than used. A market
-    whose fallback is `shifted_empirical` gets that family, built from the same counts, as
-    the comparison where the empirical family cannot be anchored (VALIDATION.md §4)."""
+    with a fallback (`pooled_shifted_empirical`, VALIDATION.md §5) gets that family, built
+    from the same counts, as the comparison where the empirical family cannot be anchored
+    or does not move one way (§5 L7)."""
     primary, alternative, backup = {}, {}, {}
     for market in markets:
         path = Path(directory) / f"{market}.json"
@@ -341,8 +402,11 @@ def load_tier_b(directory: Path | str, markets: Iterable[str], selected: dict[st
             raise ValueError(f"{path}: bandwidth {empirical.bandwidth} differs from the config's {bandwidths[scale]}")
         first, second = (empirical, normal) if selected[scale] == "empirical" else (normal, empirical)
         primary[market], alternative[market] = first, second
-        if (fallback or {}).get(scale) == "shifted_empirical" and second is empirical:
-            backup[market] = ShiftedEmpiricalFamily.from_buckets(
+        name = (fallback or {}).get(scale, "none")
+        if name != "none":
+            if name not in FALLBACKS or second is not empirical:
+                raise ValueError(f"comparison fallback {name!r} is not defined for {market}")
+            backup[market] = FALLBACKS[name].from_buckets(
                 market, empirical.buckets, bucket_width=empirical.bucket_width, bandwidth=empirical.bandwidth)
     return TierB(primary, alternative, backup) if primary else None
 
@@ -360,14 +424,23 @@ class TierB:
         self.primary, self.alternative = primary, alternative
         self.fallback = fallback or {}      # comparison where `alternative` cannot be anchored
 
+    def fair(self, market: str, ref_line: float, p_ref: float) -> Anchored:
+        """The selected family alone pinned to the consensus, for the fair line (RULES R-5.6):
+        the comparison only widens σ_translate, so it never moves the fair line."""
+        return anchor(self.primary[market], ref_line, p_ref)
+
     def anchored(self, market: str, ref_line: float, p_ref: float) -> tuple[Anchored, Anchored]:
+        """Both families pinned to the consensus. A comparison that cannot be anchored, or
+        does not move one way across its window, counts as not anchored (VALIDATION.md §5
+        L8); the fallback replaces it if there is one, else this raises and Tier B fails
+        closed."""
         first = anchor(self.primary[market], ref_line, p_ref)
         try:
-            second = anchor(self.alternative[market], ref_line, p_ref)
+            second = anchor(self.alternative[market], ref_line, p_ref, one_way=True)
         except ValueError:
             if market not in self.fallback:
                 raise
-            second = anchor(self.fallback[market], ref_line, p_ref)
+            second = anchor(self.fallback[market], ref_line, p_ref, one_way=True)
         return first, second
 
     @staticmethod

@@ -243,6 +243,14 @@ def test_families_round_trip_and_tier_b(tmp_path):
         dist.load_tier_b(tmp_path, ["spreads"], {"spread": "empirical"})
     with pytest.raises(ValueError):                                      # bandwidth drifted
         dist.load_tier_b(tmp_path, ["spreads"], {"spread": "normal"}, {"spread": 2.0})
+    pooled = dist.load_tier_b(tmp_path, ["spreads"], {"spread": "normal"}, {"spread": 1.0},
+                              {"spread": "pooled_shifted_empirical"})
+    assert pooled.fallback["spreads"].__class__ is dist.PooledShiftedEmpiricalFamily
+    assert pooled.fallback["spreads"].buckets == emp.buckets
+    assert dist.load_tier_b(tmp_path, ["spreads"], {"spread": "normal"}, {"spread": 1.0},
+                            {"spread": "none"}).fallback == {}
+    with pytest.raises(ValueError):                                      # no such family
+        dist.load_tier_b(tmp_path, ["spreads"], {"spread": "normal"}, {"spread": 1.0}, {"spread": "isotonic"})
 
 
 def test_end_to_end_run_and_render(tmp_path, cfg):
@@ -264,8 +272,10 @@ def test_end_to_end_run_and_render(tmp_path, cfg):
     assert ctx["k"] in validate.K_GRID
     text = validate.render(ctx)
     for heading in ("### R1 Dataset", "### R3 Spreads", "### R3 Totals", "### R5 De-vig", "### R6 Veto model",
-                    "### R7 Values"):
+                    "### R8 Large spreads", "### R9 Pooled shifted family", "### R7 Values"):
         assert heading in text
+    # no laid line of 12+ in this history: T3 and T5 cannot hold on no games
+    assert ("distribution.comparison_fallback.spread", "none", "§4 T1-T3, §5 T4-T5") in ctx["decisions"]
     paths = validate.write_dist(ctx, tmp_path / "dist")
     assert sorted(p.name for p in paths) == ["spreads.json", "totals.json"]
 

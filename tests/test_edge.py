@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import pytest
 
-from bethero_nba import edge
+from bethero_nba import dist, edge
 from tests.helpers import (HypotheticalTierB, TIP, US_TS, board, context, game_consensus,
                            us_game, with_values)
 
@@ -118,6 +118,18 @@ def test_failed_anchoring_fails_closed(validated):
             raise ValueError("no history near this line")
     d = run(validated, tier_b=Unanchorable())[("handicap", "home")]
     assert d.primary == "NB-TIER-C" and d.fair_source == "l_ref"
+
+
+def test_a_comparison_that_does_not_move_one_way_fails_closed(validated):
+    class Wobbly(HypotheticalTierB):                       # the selected family anchors; the comparison wobbles
+        def anchored(self, market, ref_line, p_ref):
+            raise dist.NotOneWay("does not move one way")
+
+        def fair(self, market, ref_line, p_ref):
+            return HypotheticalTierB.anchored(self, market, ref_line, p_ref)[0]
+    d = run(validated, tier_b=Wobbly())[("handicap", "home")]
+    assert d.primary == "NB-TIER-C" and "換算失敗：比較分布在這條線不單調" in d.notes
+    assert d.fair_source == "distribution"                 # still the selected family's (ERRATA E-013)
 
 
 def test_tier_b_gap_limit(validated):
