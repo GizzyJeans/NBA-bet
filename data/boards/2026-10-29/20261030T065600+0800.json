@@ -1,0 +1,73 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-10-29",
+  "platform_ts": "2026-10-30T06:56:00+08:00",
+  "ts_source": "screenshot_clock",
+  "source": "Eric's platform screenshot, phone clock 6:56 (Taipei), header NBA 美國職業籃球(3); the platform prints NO for NOP. Zoomed: handicaps 1平 on the ATL row, 7+50 on the NO row, 7-75 on the POR row; moneyline offered only for SAC@NO",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-10-30T08:05:00+08:00",
+      "home": "ATL",
+      "away": "CLE",
+      "handicap": {
+        "text": "1平",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大238-50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-10-30T08:05:00+08:00",
+      "home": "NOP",
+      "away": "SAC",
+      "handicap": {
+        "text": "7+50",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大235平",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 0.4,
+        "price_away": 1.93
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-10-30T10:05:00+08:00",
+      "home": "POR",
+      "away": "MEM",
+      "handicap": {
+        "text": "7-75",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大233-50",
+        "price_over": 0.93,
+        "price_under": 0.95
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    }
+  ]
+}
