@@ -1,0 +1,11 @@
+{
+  "schema": "bethero-nba-referees/1",
+  "slate_et": "2026-10-29",
+  "seen_at": "2026-10-30T06:55:00+08:00",
+  "source": "Eric's screenshot of official.nba.com/referee-assignments dated October 29, 2026, phone clock 6:55 (Taipei; 18:55 ET, after the 10:00 ET time rule, so it moves nothing). Not needed since config 0.6.4 (time rule: posted from 10:00 ET); kept as evidence",
+  "games": [
+    "CLE@ATL",
+    "SAC@NOP",
+    "MEM@POR"
+  ]
+}
