@@ -1,0 +1,52 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-10-30",
+  "platform_ts": "2026-10-31T09:03:00+08:00",
+  "ts_source": "received",
+  "source": "Eric's platform screenshot, cropped without the phone clock, so platform_ts is when it arrived (Taipei). Header NBA 美國職業籃球(5) but only the two 10:05 rows are in the crop; the platform prints PHO for PHX. Zoomed: handicaps 3平 on the LAL row and 4-50 on the DEN row",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-10-31T10:05:00+08:00",
+      "home": "GSW",
+      "away": "LAL",
+      "handicap": {
+        "text": "3平",
+        "row": "away",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大234.5",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 1.19,
+        "price_away": 0.67
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-10-31T10:05:00+08:00",
+      "home": "PHX",
+      "away": "DEN",
+      "handicap": {
+        "text": "4-50",
+        "row": "away",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大231.5",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 1.36,
+        "price_away": 0.58
+      },
+      "unresolved": []
+    }
+  ]
+}
