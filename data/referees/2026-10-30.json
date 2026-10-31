@@ -1,0 +1,10 @@
+{
+  "schema": "bethero-nba-referees/1",
+  "slate_et": "2026-10-30",
+  "seen_at": "2026-10-31T09:03:00+08:00",
+  "source": "Eric's cropped screenshot of the referee assignments for LAL@GSW and DEN@PHX; no date header or phone clock in the crop, so seen_at is when it arrived (Taipei). Not needed since config 0.6.4 (time rule: posted from 10:00 ET); kept as evidence",
+  "games": [
+    "LAL@GSW",
+    "DEN@PHX"
+  ]
+}
