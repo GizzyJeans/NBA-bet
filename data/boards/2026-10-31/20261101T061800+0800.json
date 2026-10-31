@@ -1,0 +1,115 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-10-31",
+  "platform_ts": "2026-11-01T06:18:00+08:00",
+  "ts_source": "screenshot_clock",
+  "source": "Eric's platform screenshot, phone clock 6:18 (Taipei), header NBA 美國職業籃球(5); the platform prints NO for NOP and SAN for SAS. Zoomed: handicaps 5-75 on the ATL row, 9+75 on the MEM row, 9-75 on the CLE row, 12-75 on the SAN row, 3+75 on the HOU row; moneyline offered only for ATL@NO",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-11-01T07:05:00+08:00",
+      "home": "NOP",
+      "away": "ATL",
+      "handicap": {
+        "text": "5-75",
+        "row": "away",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大239平",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 1.56,
+        "price_away": 0.51
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-01T08:05:00+08:00",
+      "home": "MEM",
+      "away": "SAC",
+      "handicap": {
+        "text": "9+75",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大229.5",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-01T08:05:00+08:00",
+      "home": "MIL",
+      "away": "CLE",
+      "handicap": {
+        "text": "9-75",
+        "row": "away",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大235-50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-01T08:05:00+08:00",
+      "home": "SAS",
+      "away": "MIN",
+      "handicap": {
+        "text": "12-75",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大229平",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-01T08:35:00+08:00",
+      "home": "HOU",
+      "away": "OKC",
+      "handicap": {
+        "text": "3+75",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大219.5",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    }
+  ]
+}
