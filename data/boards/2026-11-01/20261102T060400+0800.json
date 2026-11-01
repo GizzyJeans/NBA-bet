@@ -1,0 +1,52 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-11-01",
+  "platform_ts": "2026-11-02T06:04:00+08:00",
+  "ts_source": "screenshot_clock",
+  "source": "Eric's platform screenshot, phone clock 6:04 (Taipei), header NBA 美國職業籃球(3). BKN@IND (3-50 on the IND row, 06:05 Taipei) is left out: it tipped before this board could be committed (R-14.2; the image was read at 06:08). Zoomed: handicaps 2-50 on the GSW row and 3平 on the LAL row; moneyline offered for TOR@LAL",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-11-02T09:35:00+08:00",
+      "home": "GSW",
+      "away": "LAC",
+      "handicap": {
+        "text": "2-50",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大220平",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-02T10:05:00+08:00",
+      "home": "LAL",
+      "away": "TOR",
+      "handicap": {
+        "text": "3平",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大225+50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 0.59,
+        "price_away": 1.37
+      },
+      "unresolved": []
+    }
+  ]
+}
