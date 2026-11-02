@@ -1,0 +1,10 @@
+{
+  "schema": "bethero-nba-referees/1",
+  "slate_et": "2026-11-02",
+  "seen_at": "2026-11-03T06:05:00+08:00",
+  "source": "Eric's two screenshots of official.nba.com/referee-assignments dated November 2, 2026, phone clock 6:05 and 6:06 (Taipei; 17:05 ET, after the 10:00 ET time rule, so they move nothing). 15 games. Not needed since config 0.6.4 (time rule: posted from 10:00 ET); kept as evidence",
+  "games": [
+    "OKC@CLE", "DET@CHA", "ATL@IND", "BKN@NYK", "WAS@ORL", "CHI@PHI", "SAC@DAL", "NOP@MEM",
+    "MIL@MIN", "BOS@HOU", "UTA@SAS", "POR@DEN", "PHX@GSW", "TOR@LAC", "MIA@LAL"
+  ]
+}
