@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.6.7 · 2026-10-28 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
+**Version 0.6.8 · 2026-11-03 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 

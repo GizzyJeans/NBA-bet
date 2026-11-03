@@ -12,8 +12,8 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.6.7
-  updated: 2026-10-28
+  version: 0.6.8
+  updated: 2026-11-03
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
 
@@ -244,10 +244,9 @@ us_odds:
     status: FACT
     source: "Odds API response headers 2026-10-21: x-requests-used 84 + x-requests-remaining 416 = 500"
   max_calls_per_day:
-    value: 2
-    status: UNVALIDATED
-    source: "Claude 2026-10-23"
-    rationale: "two regions cost 6 credits a pull: 2 pulls x 6 x 30 days = 360, plus score pulls, stays inside 500; one pull for Eric's screenshot, one timed as the close of the main tip window"
+    value: 3
+    status: CONFIRMED
+    source: "Eric 2026-11-03, 「同意」 to raising the cap from 2 to 3 so the three late games of the 2026-11-02 ET slate could be analysed after the morning close pull. The plan stays two pulls a day (one for Eric's screenshot, one as the close of the main tip window: 2 x 6 x 30 = 360 credits a month); a third is the exception, paid from the rest of the 500, and the reserve still applies"
   min_remaining_reserve:
     value: 50
     status: UNVALIDATED

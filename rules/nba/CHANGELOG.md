@@ -2,6 +2,13 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.8 · 2026-11-03
+
+- `us_odds.max_calls_per_day` 2 → 3, now CONFIRMED (Eric 2026-11-03: 「同意」).
+  - Why: the three 11:05 (Taipei) games of the 2026-11-02 ET slate were not on his 06:04 screenshot. By the time their screenshot came, the morning close pull had used one of the UTC day's two pulls, so analysing them would have left no pull for that evening's regular pass. Claude put the choice to Eric, since the credits are his.
+  - The plan stays two pulls a day (the screenshot pass and the close pull). A third is the exception: 482 credits were left on 2026-11-03 against about 336 for two pulls a day to month end. `us_odds.min_remaining_reserve` still applies.
+- Consequence for bets: none by itself; it only lets a third US snapshot be taken on a day that needs one.
+
 ## 0.6.7 · 2026-10-28
 
 - VALIDATION.md §5 tested a second fix for large spreads after §4's failed (0.6.6). Eric 2026-10-28: 「好，去改善大讓分的換算」. The criteria were pre-declared and committed (654a917) before anything was computed. The games are R8's: 336 holdout spreads with laid lines of 12+ points.
