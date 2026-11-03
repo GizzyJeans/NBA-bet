@@ -1,0 +1,94 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-11-02",
+  "platform_ts": "2026-11-03T10:00:00+08:00",
+  "ts_source": "received",
+  "source": "Eric's second platform screenshot of the slate, cropped without the phone clock, so platform_ts is when it arrived (Taipei). Header NBA 美國職業籃球(5); four rows in view: POR@DEN (again, total now 232平 and moneyline 1.290/0.500) and the three 11:05 games missing from the 06:04 board. The platform prints PHO for PHX. Handicaps: 4平 on DEN, 4.5 on TOR, 3+25 on GSW, 1.5 on LAL",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-11-03T10:05:00+08:00",
+      "home": "DEN",
+      "away": "POR",
+      "handicap": {
+        "text": "4平",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大232平",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 0.5,
+        "price_away": 1.29
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-03T11:05:00+08:00",
+      "home": "LAC",
+      "away": "TOR",
+      "handicap": {
+        "text": "4.5",
+        "row": "away",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大219-50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 1.45,
+        "price_away": 0.5
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-03T11:05:00+08:00",
+      "home": "GSW",
+      "away": "PHX",
+      "handicap": {
+        "text": "3+25",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大227.5",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 0.75,
+        "price_away": 1.08
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-03T11:05:00+08:00",
+      "home": "LAL",
+      "away": "MIA",
+      "handicap": {
+        "text": "1.5",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大237平",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    }
+  ]
+}
