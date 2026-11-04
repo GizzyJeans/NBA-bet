@@ -1,0 +1,73 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-11-04",
+  "platform_ts": "2026-11-05T07:19:00+08:00",
+  "ts_source": "received",
+  "source": "Eric's second platform screenshot, cropped without the phone clock, so platform_ts is when it arrived (Taipei): the three rows below the 7:16 screenshot. The platform prints SAN for SAS. Zoomed: handicaps 12-50 on SAN, 12-75 on LAL, 6+25 on MIA",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-11-05T10:35:00+08:00",
+      "home": "SAS",
+      "away": "DAL",
+      "handicap": {
+        "text": "12-50",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大226-50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-05T11:05:00+08:00",
+      "home": "SAC",
+      "away": "LAL",
+      "handicap": {
+        "text": "12-75",
+        "row": "away",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大233-50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-05T11:35:00+08:00",
+      "home": "LAC",
+      "away": "MIA",
+      "handicap": {
+        "text": "6+25",
+        "row": "away",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大233平",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 1.69,
+        "price_away": 0.46
+      },
+      "unresolved": []
+    }
+  ]
+}
