@@ -111,3 +111,12 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
   - Replaying the last pass of each of the five slates (264 decisions) with the fix changes nothing else.
   - Left in place, §5 L8 would have spread it to Tier A markets at large lines: MIL@PHI 12.5 (10-24 slate) would have recorded 12.5 instead of 12.85.
 - **Fix:** `TierB.fair` anchors the selected family alone, and the fair line uses it (RULES 0.6.7).
+
+## E-014 · 2026-11-05 · Phase 2 `src/bethero_nba/settle.py`: the close window
+
+- **Wrong:** `settle` used whatever `--close-odds` snapshot it was given for CLV_US. R-14.3 counts as the close only a snapshot within `snapshots.close_snapshot_window_min` (15) before tip.
+- **Correct:** a snapshot outside that window, or after tip, gives no close: CLV is N/A, never imputed. With two readings of tip (the board's and the Odds API commence time), it must fall within the window before both.
+- **Impact:** none on any number, gate or stake. `settle` has never run, because no shadow bet has been made.
+  - Of the two close pulls so far, 2026-11-03 00:19 UTC was outside the window (15.6 minutes before the platform tip) and would have been used.
+  - 2026-11-05 00:26 UTC is inside it for all three games it was timed for.
+- **Fix:** `settle.close_in_window`, with tests; R-14.3 states the reading (RULES 0.6.9).

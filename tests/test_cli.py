@@ -3,7 +3,7 @@
 import hashlib
 import json
 import shutil
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -40,8 +40,8 @@ def store(root, payload, when):
     return client.get("https://api.the-odds-api.com/v4/x").path
 
 
-def odds_payload():
-    g = us_game(spreads=[(-110, -110)] * 8, spread_point=-2.5, h2h=[(-300, 250)] * 8)
+def odds_payload(age_min=2):
+    g = us_game(spreads=[(-110, -110)] * 8, spread_point=-2.5, h2h=[(-300, 250)] * 8, age_min=age_min)
     books = {}
     for q in g.quotes:
         b = books.setdefault(q.book, {"key": q.book, "title": q.book, "last_update": q.last_update.isoformat(),
@@ -78,7 +78,12 @@ def repo(tmp_path, root):
     return tmp_path, path, store(tmp_path, odds_payload(), US_TS.astimezone(timezone.utc))
 
 
-def test_analyze_then_settle(repo):
+@pytest.mark.parametrize("close_before_tip_min, clv", [
+    (10, True),            # inside the 15-minute close window (R-14.3)
+    (None, False),         # the analysis snapshot, 78 minutes before tip: not the close
+    (-1, False),           # after tip
+])
+def test_analyze_then_settle(repo, close_before_tip_min, clv):
     tmp, board_path, snapshot = repo
     code = analyze.main(["--root", str(tmp), "--board", str(board_path), "--odds", str(snapshot),
                          "--injuries", str(tmp / "injuries.json"), "--now", ANALYSIS_TS.isoformat()])
@@ -93,12 +98,30 @@ def test_analyze_then_settle(repo):
                "home_team": HOME, "away_team": AWAY,
                "scores": [{"name": HOME, "score": "112"}, {"name": AWAY, "score": "104"}]}]
     scores_path = store(tmp, scores, datetime(2026, 11, 3, 6, 0, tzinfo=timezone.utc))
+    close = snapshot
+    if close_before_tip_min is not None:
+        when = TIP - timedelta(minutes=close_before_tip_min)
+        close = store(tmp, odds_payload(age_min=-(when - US_TS).total_seconds() / 60 + 2),
+                      when.astimezone(timezone.utc))
     assert settle.main(["--root", str(tmp), "--slate", "2026-11-02", "--scores", str(scores_path),
-                        "--close-odds", str(snapshot)]) == 0
+                        "--close-odds", str(close)]) == 0
     settled = [r for r in ledger.verify(tmp / "logs" / "ledger.jsonl") if r.get("record_type") == "settlement"]
     assert len(settled) == 1
     assert settled[0]["return_per_unit"] == pytest.approx(0.60)
-    assert settled[0]["clv_us"] is not None
+    assert (settled[0]["clv_us"] is not None) is clv
+
+
+def test_close_window_needs_both_readings_of_tip():
+    board_tip = datetime(2026, 11, 5, 0, 35, tzinfo=timezone.utc)        # platform, 5 min after schedule
+    commence = datetime(2026, 11, 5, 0, 40, tzinfo=timezone.utc)         # Odds API
+    tips = (board_tip, commence)
+    at = lambda h, m, s=0: datetime(2026, 11, 5, h, m, s, tzinfo=timezone.utc)  # noqa: E731
+    assert settle.close_in_window(at(0, 26, 50), tips, 15)
+    assert settle.close_in_window(at(0, 25), tips, 15)
+    assert not settle.close_in_window(at(0, 24, 59), tips, 15)      # 15 min 1 s before the later tip
+    assert settle.close_in_window(at(0, 34, 59), tips, 15)
+    assert not settle.close_in_window(at(0, 35), tips, 15)          # at the earlier tip
+    assert not settle.close_in_window(at(0, 19, 24), tips, 15)      # the 11-03 morning pull's timing
 
 
 def test_realised_return_on_a_tail_line():

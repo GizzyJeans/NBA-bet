@@ -2,6 +2,14 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.9 · 2026-11-05
+
+- R-14.3: `settle` now applies the close window. Before, it took any `--close-odds` snapshot for CLV_US, whatever its time (ERRATA E-014).
+  - A snapshot outside `snapshots.close_snapshot_window_min` before tip, or after it, is not the close, so CLV is N/A.
+  - Stricter reading, flagged to Eric: tip has two readings, the board's and the Odds API commence time, and the snapshot must fall within the window before both.
+  - Found after the 2026-11-03 close pull came 15.6 minutes before the platform tip. The close pull is now timed about 8 minutes before the platform tip; the 2026-11-05 pull fell inside the window under both readings.
+- Consequence for bets: none. `settle` has not run on any slate, because no shadow bet has been made.
+
 ## 0.6.8 · 2026-11-03
 
 - `us_odds.max_calls_per_day` 2 → 3, now CONFIRMED (Eric 2026-11-03: 「同意」).

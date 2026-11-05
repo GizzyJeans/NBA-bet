@@ -12,8 +12,8 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.6.8
-  updated: 2026-11-03
+  version: 0.6.9
+  updated: 2026-11-05
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
 

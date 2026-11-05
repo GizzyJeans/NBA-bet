@@ -5,9 +5,10 @@
 
 Bets are the decision rows of the latest pass for each market that passed
 every gate. Each gets its realised return from the final score (overtime
-included), CLV_US from the US close when the needed lines are quoted there
-(Tier A at the close), and CLV_line when Eric's last pre-tip screenshot is
-given. Anything missing stays None (RULES R-14.3). Results are appended to the
+included), CLV_US from the US close when the snapshot falls within the close
+window before tip and the needed lines are quoted there (Tier A at the close),
+and CLV_line when Eric's last pre-tip screenshot is given. Anything missing
+stays None (RULES R-14.3). Results are appended to the
 ledger and the pause rule is re-checked (R-14.7).
 """
 
@@ -15,8 +16,9 @@ from __future__ import annotations
 
 import argparse
 import subprocess
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Iterable
 
 from . import cli, clv, consensus, ledger, net, oddsapi
 from .odds import Leg, expected_value, needed_points, ticket_outcomes
@@ -80,6 +82,14 @@ def realised(record: dict, home_score: int, away_score: int) -> float:
     return expected_value(outcome)
 
 
+def close_in_window(retrieved_at: datetime, tips: Iterable[datetime], window_min: float) -> bool:
+    """RULES R-14.3: a US snapshot is the close only if taken within `window_min` before tip.
+    Tip has two readings, the board's and the Odds API's commence time; the snapshot must fall
+    within the window before both, the stricter reading."""
+    tips = list(tips)
+    return max(tips) - timedelta(minutes=window_min) <= retrieved_at < min(tips)
+
+
 def close_cover(gc: consensus.GameConsensus, record: dict, legs, cfg):
     """US close cover function if every needed point is quoted at the close, else None."""
     market, giver = US_MARKET[record["market"]], _giver(record)
@@ -126,6 +136,12 @@ def main(argv: list[str] | None = None) -> int:
         clv_us = clv_line = None
         game = next((g for g in close_games if team(g.home_team).tricode == home
                      and team(g.away_team).tricode == away), None)
+        window = cfg.get("snapshots.close_snapshot_window_min")
+        if game is not None and not close_in_window(
+                close_ts, (datetime.fromisoformat(bet["game"]["tip"]), game.commence_time), window):
+            print(f"{away}@{home}: the close snapshot ({close_ts:%H:%M} UTC) is not within {window:g} min "
+                  f"before tip; CLV is N/A (R-14.3)")
+            game = None
         if game is not None:
             gc = consensus.build(game, close_ts, methods=tuple(cfg.get("anchor.devig_methods")),
                                  max_age_min=cfg.get("anchor.us_quote_max_age_min"))

@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.6.8 · 2026-11-03 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
+**Version 0.6.9 · 2026-11-05 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -279,7 +279,7 @@ Confidence is informational; it never changes a stake.
 
 - **R-14.1** Every evaluated game × market × side, bet or not, is appended to a SHA-256 hash-chained JSONL ledger (`Codex-NPB src/codex_npb/ledger.py`). Each row holds: `platform_ts` and `ts_source`, `us_ts`, injury report time; platform notation, legs, prices; US consensus per line and per method; fair line; tier; EV ± σ_EV; divergence; reason codes; flags; confidence; model output; stake and mode; config version; code commit.
 - **R-14.2** Board files are committed before the first tip they cover. The commit time is the evidence of pricing time and is checked per game (`Codex-NPB src/codex_npb/pipeline_cli.py`, `_board_row_commit_times`).
-- **R-14.3** US close = the last US snapshot within `cfg:snapshots.close_snapshot_window_min` before tip. Platform close = Eric's last screenshot before tip. Missing → CLV is N/A, never imputed.
+- **R-14.3** US close = the last US snapshot within `cfg:snapshots.close_snapshot_window_min` before tip. Tip has two readings, the board's and the Odds API commence time; the snapshot must fall within the window before both (the stricter reading, ERRATA E-014). Platform close = Eric's last screenshot before tip. Missing → CLV is N/A, never imputed.
 - **R-14.4** `CLV_line` = P(cover | bet line) − P(cover | platform closing line), both under the US closing fair distribution. *Why:* the platform moves the line, not the price, so price CLV is structurally 0.
 - **R-14.5** `CLV_US` = EV of the bet ticket under the US closing fair distribution at the platform price, plus its change since bet time.
 - **R-14.6** Weekly review on `cfg:clv.review_weekday` (Taipei): mean `CLV_line` and `CLV_US` with N and a date-block bootstrap CI; the bias monitor; veto hit-rate (CLV of vetoed versus non-vetoed candidates); reason-code counts; tier mix.
