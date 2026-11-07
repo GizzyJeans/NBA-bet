@@ -1,0 +1,7 @@
+{
+  "schema": "bethero-nba-referees/1",
+  "slate_et": "2026-11-07",
+  "seen_at": "2026-11-07T22:34:00+08:00",
+  "source": "Eric's screenshot of official.nba.com/referee-assignments dated November 7, 2026, phone clock 10:34 (12-hour display; 22:34 Taipei = 09:34 ET, before the 10:00 ET time rule, so it was passed as --referees-posted-at). 7 games",
+  "games": ["DEN@IND", "BKN@ATL", "NYK@CLE", "WAS@OKC", "ORL@GSW", "HOU@PHX", "SAS@POR"]
+}
