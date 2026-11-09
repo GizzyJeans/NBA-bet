@@ -1,0 +1,7 @@
+{
+  "schema": "bethero-nba-referees/1",
+  "slate_et": "2026-11-09",
+  "seen_at": "2026-11-10T06:48:00+08:00",
+  "source": "Eric's screenshot of official.nba.com/referee-assignments, phone clock 6:48 (Taipei; 17:48 ET on 11-09, after the 10:00 ET time rule, so it moves nothing); the date line is scrolled out of view. 8 games; WAS@DET is not on the platform board. Not needed since config 0.6.4 (time rule: posted from 10:00 ET); kept as evidence",
+  "games": ["LAL@ATL", "CLE@CHA", "WAS@DET", "MEM@TOR", "IND@DAL", "DEN@HOU", "SAS@PHX", "NOP@GSW"]
+}
