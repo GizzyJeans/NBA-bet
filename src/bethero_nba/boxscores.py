@@ -81,6 +81,9 @@ class BoxScores:
     games: dict[str, list[TeamGame]]                # tricode -> its games by date
     names: dict[str, dict[str, set[str]]]           # tricode -> normalised name -> athlete ids
     sources: list[dict] = field(default_factory=list)
+    # (home, away, US Eastern date) -> (home score, away score), for final games whose two
+    # box scores pass both checks
+    finals: dict[tuple[str, str, date], tuple[int, int]] = field(default_factory=dict)
 
     def recent(self, tricode: str, player: str, before: date, window: int) -> tuple[list[float] | None, str]:
         """His minutes in his last `window` games played for this team before `before`, oldest first
@@ -166,6 +169,7 @@ def parse(box_text: str, schedule_text: str, season: int, cfg) -> BoxScores:
         lines[(r["game_id"], tricode)].append(r)
         names[tricode][normalise(r["athlete_display_name"])].add(r["athlete_id"])
     games: dict[str, list[TeamGame]] = defaultdict(list)
+    finals: dict[tuple[str, str, date], tuple[int, int]] = {}
     for g in _rows(schedule_text, SCHEDULE_COLUMNS, "schedule"):
         if g["status_type_name"] != FINAL and not all(_known(g[f"{side}_abbreviation"]) for side in ("home", "away")):
             continue          # teams not set yet (NBA Cup knockout "TBD"): not played, so in no window
@@ -184,9 +188,12 @@ def parse(box_text: str, schedule_text: str, season: int, cfg) -> BoxScores:
                        and points == _number(g[f"{side}_score"])
                        and abs(sum(played.values()) - full) <= tolerance * len(played))
             games[tricode].append(TeamGame(g["game_id"], day, g["status_type_name"], checked, played))
+        home, away = _tricode(g["home_abbreviation"]), _tricode(g["away_abbreviation"])
+        if all(games[t][-1].checked for t in (home, away)):
+            finals[(home, away, day)] = (int(_number(g["home_score"])), int(_number(g["away_score"])))
     for team_games in games.values():
         team_games.sort(key=lambda t: t.day)
-    return BoxScores(season, dict(games), {t: dict(n) for t, n in names.items()})
+    return BoxScores(season, dict(games), {t: dict(n) for t, n in names.items()}, finals=finals)
 
 
 def _source(fetched: Fetched) -> dict:

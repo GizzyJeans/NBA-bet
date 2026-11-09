@@ -2,6 +2,16 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.10 · 2026-11-09
+
+- R-14.6: new command `python -m bethero_nba.track` for the results part of the weekly review. Eric 2026-11-09 asked for the win rates above EV +1%, 0% and −1%, then 「做成固定指令」.
+  - Every priced side counts once: the latest decision for its game, market and side, across passes.
+  - Results come from ESPN's box-score finals via sportsdataverse, only for games whose two box scores pass the R-9.3 checks. Appendix B now lists this second use.
+  - `CLV_US` comes from the last stored US snapshot inside the R-14.3 close window; without one it is N/A.
+  - Intervals: Wilson for the win rate; date-block bootstrap (`bias.bootstrap`) for the mean return and CLV.
+  - Reports go to `reports/tracking/`.
+- Consequence for bets: none; the report is descriptive and changes no gate or threshold.
+
 ## 0.6.9 · 2026-11-05
 
 - R-14.3: `settle` now applies the close window. Before, it took any `--close-odds` snapshot for CLV_US, whatever its time (ERRATA E-014).

@@ -69,3 +69,7 @@ py -m bethero_nba.analyze --board <board.json> --live --injury-pdf <pdf>
   - Relay `settle`'s pause line and go-live readiness line.
   - If the pause rule fires (R-14.7), set `mode: paused` through the `nba-rule-change` skill and tell Eric.
   - Readiness never switches the mode; only Eric's go-live message does (R-12.7).
+- **Track weekly** (R-14.6, `cfg:clv.review_weekday`, Taipei) or whenever Eric asks: run `py -m bethero_nba.track --live`.
+  - Relay its EV-threshold table: win rate, return and CLV_US, each with its range and N.
+  - Say plainly when N is too small to conclude anything.
+  - Commit `reports/tracking/`.

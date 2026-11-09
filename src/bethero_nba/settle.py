@@ -70,8 +70,8 @@ def _giver(record: dict) -> str:
     return record["side"] if record["laying"] else ("away" if record["side"] == "home" else "home")
 
 
-def realised(record: dict, home_score: int, away_score: int) -> float:
-    """Profit per unit staked, from the final score."""
+def result(record: dict, home_score: int, away_score: int) -> tuple[float, float, float]:
+    """(share of the stake won, share lost, profit per unit staked) from the final score."""
     giver = _giver(record)
     if record["market"] == "total":
         x = home_score + away_score
@@ -79,7 +79,13 @@ def realised(record: dict, home_score: int, away_score: int) -> float:
         x = home_score - away_score if giver == "home" else away_score - home_score
     outcome = ticket_outcomes(_legs(record), record["platform"]["price"], lambda p: 1.0 if x > p else 0.0,
                               record["laying"])
-    return expected_value(outcome)
+    return (sum(o.prob * o.win for o in outcome), sum(o.prob * o.loss for o in outcome),
+            expected_value(outcome))
+
+
+def realised(record: dict, home_score: int, away_score: int) -> float:
+    """Profit per unit staked, from the final score."""
+    return result(record, home_score, away_score)[2]
 
 
 def close_in_window(retrieved_at: datetime, tips: Iterable[datetime], window_min: float) -> bool:
