@@ -2,6 +2,14 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.11 · 2026-11-17
+
+- R-16.7 (new): each report lists the day's top `report.top_list_size` = 5 markets by EV (new, CONFIRMED). It shows the better side of each market, with what stopped it, under 各場 EV.
+  - Eric 2026-11-17 asked for a daily top 5 from CLV, EV and line, then chose this observation list (「加」).
+  - Claude advised against a recommendation list. Over the 20 slates to 11-16, betting the top 5 by EV each day gave 100 sides, 44.5–54.25, return −12.7% (−32% to +6%, date-block bootstrap); 65% of those sides had EV below 0.
+  - CLV is known only after the close, so it cannot rank sides before the bet.
+- Consequence for bets: none. A row without ★ is not a bet; the list creates and sizes nothing.
+
 ## 0.6.10 · 2026-11-09
 
 - R-14.6: new command `python -m bethero_nba.track` for the results part of the weekly review. Eric 2026-11-09 asked for the win rates above EV +1%, 0% and −1%, then 「做成固定指令」.

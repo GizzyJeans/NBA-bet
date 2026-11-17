@@ -1,7 +1,8 @@
 """Traditional Chinese report, mobile-first (RULES §16).
 
 Header, a bets table of exactly seven columns with one detail line per bet,
-every game's EV by market and side (R-16.5), a no-bet table with one row per
+every game's EV by market and side (R-16.5), the day's top sides by EV as an
+observation list (R-16.7), a no-bet table with one row per
 evaluated market, what would change each recommendation (including markets
 held only by listed players, R-16.6), and a transcription check that repeats
 every board line as read.
@@ -40,6 +41,7 @@ class ReportMeta:
     exposure_used: float
     key_rule: tuple[int, float] | None = None     # R-9.3: (window games, minimum average minutes)
     minutes_credit: str | None = None             # where listed players' minutes came from (CC BY credit)
+    top_n: int = 5                                # R-16.7: length of the EV observation list
 
 
 def _hm(moment: datetime | None) -> str:
@@ -135,6 +137,33 @@ def _ev_table(decisions: list[Decision]) -> list[str]:
     return lines
 
 
+def _top_list(decisions: list[Decision], n: int) -> list[str]:
+    """R-16.7: the n best markets by EV, the better side of each (Eric 2026-11-17: 「加」).
+    An observation list: a row without ★ is not a bet, whatever its rank."""
+    best: dict[tuple[str, str], Decision] = {}
+    for d in decisions:
+        key = (d.game.label, d.market)
+        if d.ev_worst is not None and (key not in best or d.ev_worst > best[key].ev_worst):
+            best[key] = d
+    top = sorted(best.values(), key=lambda d: d.ev_worst, reverse=True)[:n]
+    lines = [f"## 今日 EV 前 {n} 名（觀察，不是推薦）",
+             "依 EV 排序，每個市場只列較好的一邊。沒有 ★ 的都不是注；照排名下注沒有被證明有效。",
+             "", "| 名次 | 比賽 | 選項 | 平台盤/賠率 | EV(±) | 狀態 |", "|---|---|---|---|---|---|"]
+    for i, d in enumerate(top, 1):
+        if d.is_bet:
+            status = "★ 合格影子注"
+        elif d.primary in ("NB-EV", "NB-DIVERGENCE"):
+            status = "EV 未達門檻"
+        else:
+            status = f"{STOP_TAG.get(d.primary or '', d.primary or '')}：{_explain(d)}"
+        noise = f" (±{d.sigma['ev'] * 100:.1f})" if d.sigma.get("ev") is not None else ""
+        lines.append(f"| {i} | {_game_label(d.game)} {_hm(d.game.tip)} | {d.selection()} | {_platform_cell(d)} "
+                     f"| {_ev(d)}{noise} | {status} |")
+    if not top:
+        lines.append("| — | 今天沒有算得出 EV 的市場 | | | | |")
+    return lines
+
+
 def _no_bet_rows(decisions: list[Decision]) -> list[tuple[Decision, str]]:
     """One row per evaluated market: the side closest to a bet, with its primary code."""
     rows = []
@@ -217,6 +246,7 @@ def render(decisions: list[Decision], meta: ReportMeta) -> str:
     else:
         lines.append("今天沒有合格的注。")
     lines += [""] + _ev_table(decisions)
+    lines += [""] + _top_list(decisions, meta.top_n)
     lines += ["", "## 不下注", "| 比賽 | 市場 | 代碼 | 說明 |", "|---|---|---|---|"]
     for d, code in _no_bet_rows(decisions):
         lines.append(f"| {_game_label(d.game)} | {MARKET_ZH[d.market]} | {code} | {_explain(d)} |")

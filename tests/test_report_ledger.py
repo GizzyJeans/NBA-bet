@@ -28,6 +28,10 @@ def test_no_bet_report_has_every_market_and_the_transcription(cfg):
     assert "## 抄盤核對" in text and "讓 塞爾提克 4.5 / 0.95" in text
     ev_rows = [line for line in text.splitlines() if line.startswith("| 尼克@塞爾提克 | 塞爾提克讓 4.5")]
     assert len(ev_rows) == 1 and "〔過時〕" in ev_rows[0]           # R-16.5: one EV row per game
+    top = text.split("## 今日 EV 前 5 名（觀察，不是推薦）")[1].split("## 不下注")[0]
+    rows = [line for line in top.splitlines() if line.startswith("| ") and line[2].isdigit()]
+    assert 1 <= len(rows) <= 3                                       # R-16.7: one row per priced market
+    assert all("★" not in r for r in rows) and "過時" in rows[0]
     assert text.count("\n| ") >= 4
 
 

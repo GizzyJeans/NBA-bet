@@ -12,8 +12,8 @@
 # Change control: RULES.md §17. Every change bumps meta.version and adds a CHANGELOG entry.
 
 meta:
-  version: 0.6.10
-  updated: 2026-11-09
+  version: 0.6.11
+  updated: 2026-11-17
   rules: rules/nba/RULES.md
   changelog: rules/nba/CHANGELOG.md
 
@@ -536,6 +536,10 @@ report:
     value: 7
     status: RULE
     source: "brief 1.13"
+  top_list_size:
+    value: 5
+    status: CONFIRMED
+    source: "Eric 2026-11-17, 「加」 to adding the day's top 5 markets by EV to the report as an observation list, not recommendations (RULES R-16.7)"
 
 season:
   regular_season:

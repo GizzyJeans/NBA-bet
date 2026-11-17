@@ -272,7 +272,8 @@ def main(argv: list[str] | None = None) -> int:
         (cfg.get("injuries.key_player_window_games"), cfg.get("injuries.key_player_min_minutes")),
         "；".join(credit for used, credit in (
             (gates is not None and bool((gates.box_scores or {}).get("files")), boxscores.CREDIT),
-            (bool(transcription and transcription["used"]), "Eric 的出賽紀錄截圖")) if used) or None))
+            (bool(transcription and transcription["used"]), "Eric 的出賽紀錄截圖")) if used) or None,
+        cfg.get("report.top_list_size")))
     out_dir = root / "reports" / board.slate_et.isoformat()
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}.md"

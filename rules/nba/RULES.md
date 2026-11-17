@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.6.10 · 2026-11-09 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
+**Version 0.6.11 · 2026-11-17 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -324,6 +324,7 @@ Confidence is informational; it never changes a stake.
 
   It is informational. A market without ★ is not a bet, whatever its EV.
 - **R-16.4** The report ends with what would change each recommendation (「若 X 確定缺陣 → 取消」 style) and a transcription check listing every platform line as it was read.
+- **R-16.7** After 各場 EV, the section 今日 EV 前 N 名（觀察，不是推薦） lists the `cfg:report.top_list_size` markets with the highest EV, the better side of each, with its line, price, EV ± noise and what stopped it (Eric 2026-11-17: 「加」). It is an observation list: a row without ★ is not a bet, its rank never creates or sizes one, and it changes no gate.
 - **R-16.6** Under 什麼會改變建議, one line per game whose markets pass every per-market gate but are held at `NB-STATUS` only by listed key players (R-9.3). G11 and G12 run only for released markets.
   - The line gives the markets with their EV and the players, each with what his minutes showed (games played, or his average).
   - If no blocker's minutes are known, it asks for a screenshot of each one's game log this season (not from Sports Reference). Otherwise it says they are key under R-9.3 until their status changes.
