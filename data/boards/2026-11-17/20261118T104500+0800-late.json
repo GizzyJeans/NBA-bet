@@ -1,0 +1,52 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-11-17",
+  "platform_ts": "2026-11-18T10:45:00+08:00",
+  "ts_source": "screenshot_clock",
+  "source": "Eric's platform screenshot, phone clock 10:45 (12-hour display; 10:45 Taipei on 11-18: the image arrived at 10:47 Taipei, and both listed games tip later that morning). Header NBA 美國職業籃球(2): the two late games of the slate, all in view. Handicaps 6-75 on LAC, 7+25 on LAL; UTA@LAC total 228+50 at 0.940/0.940; CHA@LAL total 221-50 at 0.920 over, 0.960 under; moneyline UTA 1.900 / LAC 0.400, none on CHA@LAL",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-11-18T11:35:00+08:00",
+      "home": "LAC",
+      "away": "UTA",
+      "handicap": {
+        "text": "6-75",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大228+50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 0.4,
+        "price_away": 1.9
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-18T11:59:00+08:00",
+      "home": "LAL",
+      "away": "CHA",
+      "handicap": {
+        "text": "7+25",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大221-50",
+        "price_over": 0.92,
+        "price_under": 0.96
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    }
+  ]
+}
