@@ -44,3 +44,4 @@
 {"at": "2026-11-20T00:58:19.387261+00:00", "kind": "odds", "remaining": 302, "used": 198, "last": 6, "file": "data/raw/api.the-odds-api.com/20261120T005819Z_f7bc31fe774b.json.gz"}
 {"at": "2026-11-20T23:59:15.697363+00:00", "kind": "odds", "remaining": 296, "used": 204, "last": 6, "file": "data/raw/api.the-odds-api.com/20261120T235915Z_aab4327d92b8.json.gz"}
 {"at": "2026-11-21T00:27:22.623592+00:00", "kind": "odds", "remaining": 290, "used": 210, "last": 6, "file": "data/raw/api.the-odds-api.com/20261121T002722Z_4c30fff0b682.json.gz"}
+{"at": "2026-11-22T14:13:59.062377+00:00", "kind": "odds", "remaining": 284, "used": 216, "last": 6, "file": "data/raw/api.the-odds-api.com/20261122T141359Z_e66723a287d7.json.gz"}
