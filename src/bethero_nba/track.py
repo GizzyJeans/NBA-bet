@@ -2,13 +2,16 @@
 
     python -m bethero_nba.track --live
     python -m bethero_nba.track --box-scores <player_box .csv.gz> <schedule .csv.gz>
+    python -m bethero_nba.track --record-clv
 
 Every side the ledger priced counts once: the latest decision for its game, market and
 side, across all passes. It is settled on the final score from ESPN's box scores as
 sportsdataverse publishes them (CC BY 4.0), for games whose two box scores pass both
-checks (R-9.3). CLV_US comes from the last stored US snapshot within the close window
-before tip (R-14.3); without one it is N/A, never imputed. The report goes to
-reports/tracking/. It decides nothing: a side was a bet only if it carries no code.
+checks (R-9.3). CLV_US comes from the last US snapshot within the close window before
+tip (R-14.3); without one it is N/A, never imputed. Raw snapshots stay on the machine
+that pulled them, so each close is also written to the ledger as a `clv` record
+(derived values only, R-14.3): `--record-clv` does that, and `fetch odds` and
+`analyze` call it after every pull. The report goes to reports/tracking/. It decides nothing: a side was a bet only if it carries no code.
 """
 
 from __future__ import annotations
@@ -94,26 +97,83 @@ def stored_snapshots(raw_dir: Path) -> list[Snapshot]:
     return sorted(out, key=lambda s: s.retrieved_at)
 
 
-def add_clv(sides: list[Side], snapshots: list[Snapshot], cfg) -> None:
-    """CLV_US from the US close: the last snapshot within the window before tip (R-14.3, R-14.5)."""
+def _close(r: dict, snapshots: list[Snapshot], cfg) -> tuple[float, Snapshot, object] | None:
+    """CLV_US of one decision from the last snapshot in its close window (R-14.3, R-14.5)."""
     window = cfg.get("snapshots.close_snapshot_window_min")
-    methods = tuple(cfg.get("anchor.devig_methods"))
+    tip = datetime.fromisoformat(r["game"]["tip"])
+    for snap in reversed(snapshots):
+        if not tip - timedelta(minutes=window) <= snap.retrieved_at < tip:
+            continue
+        game = next((g for g in snap.games() if team(g.home_team).tricode == r["game"]["home"]
+                     and team(g.away_team).tricode == r["game"]["away"]), None)
+        if game is None or not settle.close_in_window(snap.retrieved_at, (tip, game.commence_time), window):
+            continue
+        gc = consensus.build(game, snap.retrieved_at, methods=tuple(cfg.get("anchor.devig_methods")),
+                             max_age_min=cfg.get("anchor.us_quote_max_age_min"))
+        legs = settle._legs(r)
+        value = clv.clv_us(legs, r["platform"]["price"], r["laying"], settle.close_cover(gc, r, legs, cfg), None)[0]
+        return value, snap, game
+    return None
+
+
+def recorded_clv(records: list[dict]) -> dict[str, dict]:
+    """The ledger's `clv` records by the hash of the decision they price; the latest close wins."""
+    out: dict[str, dict] = {}
+    for r in records:
+        if r.get("record_type") == "clv":
+            had = out.get(r["decision_hash"])
+            if had is None or r["close"]["retrieved_at"] >= had["close"]["retrieved_at"]:
+                out[r["decision_hash"]] = r
+    return out
+
+
+def add_clv(sides: list[Side], snapshots: list[Snapshot], cfg, recorded: dict[str, dict] | None = None) -> None:
+    """CLV_US from the ledger's `clv` records, else from a snapshot stored on this machine."""
+    recorded = recorded or {}
     for s in sides:
+        rec = recorded.get(s.record.get("record_hash", ""))
+        if rec is not None:
+            s.clv_us = rec["clv_us"]
+            continue
+        found = _close(s.record, snapshots, cfg)
+        if found is not None:
+            s.clv_us = found[0]
+
+
+def clv_records(records: list[dict], snapshots: list[Snapshot], cfg) -> list[dict]:
+    """New `clv` ledger payloads: each latest decision whose close is among these snapshots and not yet recorded.
+
+    Only derived values go in (CLV_US, times, the snapshot's SHA-256), never quotes: the raw
+    responses may not be redistributed (D5), so they stay in data/raw."""
+    done = {(r["decision_hash"], r["close"]["snapshot_sha256"]) for r in records if r.get("record_type") == "clv"}
+    out = []
+    for s in latest_sides(records):
         r = s.record
-        tip = datetime.fromisoformat(r["game"]["tip"])
-        for snap in reversed(snapshots):
-            if not tip - timedelta(minutes=window) <= snap.retrieved_at < tip:
-                continue
-            game = next((g for g in snap.games() if team(g.home_team).tricode == r["game"]["home"]
-                         and team(g.away_team).tricode == r["game"]["away"]), None)
-            if game is None or not settle.close_in_window(snap.retrieved_at, (tip, game.commence_time), window):
-                continue
-            gc = consensus.build(game, snap.retrieved_at, methods=methods,
-                                 max_age_min=cfg.get("anchor.us_quote_max_age_min"))
-            legs = settle._legs(r)
-            s.clv_us = clv.clv_us(legs, r["platform"]["price"], r["laying"], settle.close_cover(gc, r, legs, cfg),
-                                  None)[0]
-            break
+        if "record_hash" not in r:
+            continue
+        found = _close(r, snapshots, cfg)
+        if found is None:
+            continue
+        value, snap, game = found
+        sha = net.load_cached(snap.path).sha256
+        if (r["record_hash"], sha) in done:
+            continue
+        out.append({"record_type": "clv", "schema": "bethero-nba-clv/1", "game": r["game"],
+                    "market": r["market"], "side": r["side"], "decision_sequence": r["sequence"],
+                    "decision_hash": r["record_hash"], "clv_us": value,
+                    "close": {"retrieved_at": snap.retrieved_at.isoformat(), "snapshot_sha256": sha,
+                              "commence_time": game.commence_time.isoformat(),
+                              "window_min": cfg.get("snapshots.close_snapshot_window_min")}})
+    return out
+
+
+def record_clv(root: Path, cfg) -> int:
+    """Append the closes found among this machine's snapshots to the ledger; returns how many."""
+    path = root / "logs" / "ledger.jsonl"
+    payloads = clv_records(ledger.verify(path), stored_snapshots(root / "data" / "raw"), cfg)
+    if payloads:
+        ledger.append(path, payloads)
+    return len(payloads)
 
 
 @dataclass(frozen=True)
@@ -225,7 +285,7 @@ def _result(s: Side) -> str:
 
 
 def render(sides: list[Side], scores: boxscores.BoxScores, thresholds: list[float], cfg, now: datetime,
-           snapshots: int) -> str:
+           snapshots: int, recorded: int = 0) -> str:
     thresholds = sorted(thresholds, reverse=True)
     done = [s for s in sides if s.settled]
     slates = sorted({s.slate for s in sides})
@@ -258,7 +318,8 @@ def render(sides: list[Side], scores: boxscores.BoxScores, thresholds: list[floa
             "- 勝率 = 贏 ÷（贏＋輸），走盤不算；0.5 是 +50、−75 這類盤的贏半或輸半。賠率 0.95 損益兩平要 51.3%。",
             f"- 實際報酬與 CLV 的範圍，是以賽程日為單位重抽 {boot['resamples']} 次的 bootstrap（R-14.6）。",
             f"- CLV_US：開賽前 {cfg.get('snapshots.close_snapshot_window_min'):g} 分鐘內最後一次美盤快照（R-14.3），"
-            "用美盤收盤分布重算這張單在平台價格的 EV（R-14.5）。快照只存在當時抓取的那台機器，沒有就是 —，不補估計。",
+            "用美盤收盤分布重算這張單在平台價格的 EV（R-14.5）。每次收盤抓取後寫進帳本（只存算出的數字）；"
+            "11-23 以前的收盤只在當時抓取的機器上，沒有就是 —，不補估計。",
             "- 只有沒有任何代碼的才是影子注；其餘是「如果下了」的追蹤。偏差監測與否決命中率（R-14.6）尚未納入，模型關閉，沒有否決。",
             "", "## 資料",
             f"- 帳本 logs/ledger.jsonl（雜湊鏈已驗證）：{len(sides)} 個有 EV 的盤口，{len(slates)} 個賽程，"
@@ -267,7 +328,8 @@ def render(sides: list[Side], scores: boxscores.BoxScores, thresholds: list[floa
         out.append(f"- 比分：{src['url'].rsplit('/', 1)[-1]}，SHA-256 {src['sha256'][:12]}，"
                    f"{datetime.fromisoformat(src['retrieved_at']).astimezone(TPE):%m-%d %H:%M}（台北）下載。")
     out += [f"- {len(scores.finals)} 場終場比賽兩隊數據都通過核對（得分加總等於比分、上場時間填滿整場）。",
-            f"- 美盤快照：本機 data/raw 有 {snapshots} 份；有 CLV_US 的盤口 {sum(s.clv_us is not None for s in done)} 個。",
+            f"- 收盤 CLV：帳本記錄 {recorded} 個盤口；本機 data/raw 另有美盤快照 {snapshots} 份；"
+            f"已結算且有 CLV_US 的盤口 {sum(s.clv_us is not None for s in done)} 個。",
             "", f"比分：{boxscores.CREDIT.replace('平均由本程式計算', '結算由本程式計算')}"]
     return "\n".join(out) + "\n"
 
@@ -278,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     cli.add_root(parser)
     source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--record-clv", action="store_true",
+                        help="only write the closes found in data/raw to the ledger as clv records (R-14.3)")
     source.add_argument("--live", action="store_true", help="download the season's box scores now")
     source.add_argument("--box-scores", nargs=2, type=Path, metavar=("BOX", "SCHEDULE"),
                         help="stored box-score and schedule files (.csv.gz)")
@@ -289,6 +353,10 @@ def main(argv: list[str] | None = None) -> int:
 
     root = cli.resolve_root(args.root)
     cfg = cli.load_config(root)
+    if args.record_clv:
+        print(f"clv records written: {record_clv(root, cfg)}")
+        return 0
+    record_clv(root, cfg)
     records = ledger.verify(root / "logs" / "ledger.jsonl")
     try:
         if args.live:
@@ -301,9 +369,11 @@ def main(argv: list[str] | None = None) -> int:
     sides = latest_sides(records)
     settle_sides(sides, scores.finals)
     snapshots = stored_snapshots(root / "data" / "raw")
-    add_clv(sides, snapshots, cfg)
+    recorded = recorded_clv(records)
+    add_clv(sides, snapshots, cfg, recorded)
     now = datetime.fromisoformat(args.now) if args.now else datetime.now(timezone.utc)
-    text = render(sides, scores, args.thresholds, cfg, now, len(snapshots))
+    text = render(sides, scores, args.thresholds, cfg, now, len(snapshots),
+                  sum(s.record.get("record_hash") in recorded for s in sides))
     print(text, end="")
     if not args.no_write:
         path = root / "reports" / "tracking" / f"{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}.md"

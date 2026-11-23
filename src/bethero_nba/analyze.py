@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from . import boxscores, cli, consensus, context, dist, edge, injuries, ledger, net, oddsapi, report
+from . import boxscores, cli, consensus, context, dist, edge, injuries, ledger, net, oddsapi, report, track
 from .platform import load_board
 
 
@@ -265,6 +265,8 @@ def main(argv: list[str] | None = None) -> int:
             "decisions": len(decisions), "bets": sum(d.is_bet for d in decisions),
         }
         ledger.append(root / "logs" / "ledger.jsonl", [pass_record] + [d.to_record(ctx) for d in decisions])
+        if args.live:
+            print(f"clv records written: {track.record_clv(root, cfg)} (R-14.3)")
 
     text = report.render(decisions, report.ReportMeta(
         board, now, us_ts, report_ts, cfg.get("mode"), cfg.get("risk.bankroll"),

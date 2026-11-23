@@ -66,7 +66,7 @@ py -m bethero_nba.analyze --board <board.json> --live --injury-pdf <pdf>
   py -m bethero_nba.settle --slate <slate_et> --scores <scores .json.gz> --close-odds <close .json.gz> --close-board <last board>
   ```
 
-  - Raw snapshots live only in `data/raw/` on the machine that pulled them. If the close snapshot is gone, CLV is N/A and is never imputed (R-14.3).
+  - Raw snapshots live only in `data/raw/` on the machine that pulled them. `fetch odds` writes each close to the ledger as a `clv` row (R-14.3), so commit `logs/ledger.jsonl` with the usage log after every close pull. If the close snapshot is gone and no row exists, CLV is N/A and is never imputed.
   - Relay `settle`'s pause line and go-live readiness line.
   - If the pause rule fires (R-14.7), set `mode: paused` through the `nba-rule-change` skill and tell Eric.
   - Readiness never switches the mode; only Eric's go-live message does (R-12.7).

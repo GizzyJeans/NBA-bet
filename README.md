@@ -49,7 +49,7 @@ $env:ODDS_API_KEY = "<your key>"      # never committed, never printed
    ```powershell
    py -m bethero_nba.track --live
    ```
-   For each side the ledger priced (the latest decision per game, market and side), it gives the win rate, mean return and mean `CLV_US` above each EV threshold (default `--thresholds 1 0 -1`, in percent). Results come from ESPN's box-score finals (sportsdataverse), for games whose two box scores pass the R-9.3 checks; `CLV_US` comes from the last stored US snapshot within 15 minutes before tip, so it exists only on the machine that pulled the closes. `--box-scores <player_box .csv.gz> <schedule .csv.gz>` re-uses stored files. Output: `reports/tracking/<UTC time>.md`. It decides nothing.
+   For each side the ledger priced (the latest decision per game, market and side), it gives the win rate, mean return and mean `CLV_US` above each EV threshold (default `--thresholds 1 0 -1`, in percent). Results come from ESPN's box-score finals (sportsdataverse), for games whose two box scores pass the R-9.3 checks; `CLV_US` comes from the last US snapshot within 15 minutes before tip. `fetch odds` and `analyze --live` write each close to the ledger as a `clv` row (derived values only, R-14.3), so it survives without the raw snapshot; `--record-clv` writes any missing rows from `data/raw`. `--box-scores <player_box .csv.gz> <schedule .csv.gz>` re-uses stored files. Output: `reports/tracking/<UTC time>.md`. It decides nothing.
 
 Other commands: `py -m bethero_nba.fetch odds --live`, `py -m bethero_nba.fetch participants --live`, `py -m bethero_nba.fetch show <stored .json.gz>`, and `py -m bethero_nba.boxscores --live --slate 2026-11-02 --team NYK --player "Brunson, Jalen"` to check the box scores and one player's minutes.
 

@@ -16,7 +16,7 @@ import argparse
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from . import cli, consensus, net, oddsapi
+from . import cli, consensus, net, oddsapi, track
 
 TAIPEI = ZoneInfo("Asia/Taipei")
 
@@ -89,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
           f"this call {usage.last}")
     if args.what == "odds":
         print(summarise_odds(fetched, cfg))
+        print(f"clv records written: {track.record_clv(root, cfg)} (R-14.3)")
     elif args.what == "participants":
         names = sorted(p.get("full_name", "?") for p in fetched.json())
         print(f"{len(names)} participants: " + ", ".join(names))

@@ -121,3 +121,35 @@ def test_command_writes_the_report(root, tmp_path):
     text = (tmp_path / "reports" / "tracking" / "20261109T090000Z.md").read_text(encoding="utf-8")
     assert "| EV > +1% | 1 | 1–0–0 |" in text and "| EV > −1% | 3 | 3–0–0 |" in text
     assert "未結算 1" in text and "CC BY 4.0" in text
+
+
+def test_closes_are_written_to_the_ledger_once_and_read_back(cfg, tmp_path):
+    path = tmp_path / "ledger.jsonl"
+    ledger.append(path, records())
+    when = TIP - timedelta(minutes=10)
+    store_odds(tmp_path, close_payload(when), when.astimezone(timezone.utc))
+    snapshots = track.stored_snapshots(tmp_path / "data" / "raw")
+    rows = track.clv_records(ledger.verify(path), snapshots, cfg)
+    assert {(r["game"]["home"], r["market"], r["side"]) for r in rows} == {
+        ("BOS", "handicap", "home"), ("BOS", "handicap", "away"), ("BOS", "total", "over"),
+        ("BOS", "total", "under"), ("BOS", "moneyline", "home"), ("BOS", "moneyline", "away")}
+    assert all(set(r) >= {"decision_hash", "clv_us", "close"} and "quotes" not in r for r in rows)
+    ledger.append(path, rows)
+    assert track.clv_records(ledger.verify(path), snapshots, cfg) == []          # idempotent
+    records_now = ledger.verify(path)
+    sides = track.latest_sides(records_now)
+    track.add_clv(sides, [], cfg, track.recorded_clv(records_now))               # no snapshot left on disk
+    by = sides_by_key(sides)
+    assert by[("BOS", "handicap", "home")].clv_us == pytest.approx(0.5 * 0.95 - 0.5)
+    assert by[("MIA", "handicap", "home")].clv_us is None
+
+
+def test_record_clv_command(root, tmp_path):
+    (tmp_path / "rules" / "nba").mkdir(parents=True)
+    shutil.copy(root / "rules" / "nba" / "config.yaml", tmp_path / "rules" / "nba" / "config.yaml")
+    ledger.append(tmp_path / "logs" / "ledger.jsonl", records())
+    when = TIP - timedelta(minutes=10)
+    store_odds(tmp_path, close_payload(when), when.astimezone(timezone.utc))
+    assert track.main(["--root", str(tmp_path), "--record-clv"]) == 0
+    rows = [r for r in ledger.verify(tmp_path / "logs" / "ledger.jsonl") if r["record_type"] == "clv"]
+    assert len(rows) == 6

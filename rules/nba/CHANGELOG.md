@@ -2,6 +2,15 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.12 · 2026-11-23
+
+- R-14.3: every US close is now written to the ledger as a `clv` row, so `CLV_US` accumulates across sessions. Eric 2026-11-23: 「長期累積CLV」.
+  - Why: raw Odds API snapshots are never committed (D5; their terms forbid redistribution), and a cloud container loses `data/raw` on restart. The 2026-11-23 tracking report found only 5 snapshots on disk and `CLV_US` for 10 of 878 settled sides.
+  - What a row holds: `CLV_US`, the priced decision's sequence and hash, and the snapshot's retrieval time, SHA-256 and the game's commence time. These are derived values; no quote is stored.
+  - `fetch odds` and `analyze --live` write the rows after each pull; `python -m bethero_nba.track --record-clv` writes any missing ones. `track` reads the rows first and falls back to snapshots on disk.
+  - The window and the CLV formula are unchanged (R-14.3, R-14.5). Closes before 2026-11-23 whose snapshots are gone stay N/A; none is imputed.
+- Consequence for bets: none; CLV is measured after the bet and decides nothing until the go-live review.
+
 ## 0.6.11 · 2026-11-17
 
 - R-16.7 (new): each report lists the day's top `report.top_list_size` = 5 markets by EV (new, CONFIRMED). It shows the better side of each market, with what stopped it, under 各場 EV.
