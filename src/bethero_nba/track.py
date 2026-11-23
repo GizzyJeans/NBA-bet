@@ -144,7 +144,8 @@ def clv_records(records: list[dict], snapshots: list[Snapshot], cfg) -> list[dic
     """New `clv` ledger payloads: each latest decision whose close is among these snapshots and not yet recorded.
 
     Only derived values go in (CLV_US, times, the snapshot's SHA-256), never quotes: the raw
-    responses may not be redistributed (D5), so they stay in data/raw."""
+    responses may not be redistributed (D5), so they stay in data/raw. `clv_us` is None when
+    the close was found but does not quote every point the ticket needs (settle.close_cover)."""
     done = {(r["decision_hash"], r["close"]["snapshot_sha256"]) for r in records if r.get("record_type") == "clv"}
     out = []
     for s in latest_sides(records):
@@ -373,7 +374,7 @@ def main(argv: list[str] | None = None) -> int:
     add_clv(sides, snapshots, cfg, recorded)
     now = datetime.fromisoformat(args.now) if args.now else datetime.now(timezone.utc)
     text = render(sides, scores, args.thresholds, cfg, now, len(snapshots),
-                  sum(s.record.get("record_hash") in recorded for s in sides))
+                  sum(recorded.get(s.record.get("record_hash", ""), {}).get("clv_us") is not None for s in sides))
     print(text, end="")
     if not args.no_write:
         path = root / "reports" / "tracking" / f"{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}.md"
