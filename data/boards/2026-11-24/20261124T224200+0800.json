@@ -1,0 +1,73 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-11-24",
+  "platform_ts": "2026-11-24T22:42:00+08:00",
+  "ts_source": "screenshot_clock",
+  "source": "Eric's platform screenshot, phone clock 10:42 (12-hour display; 22:42 Taipei on 11-24: the image arrived at 22:43, the referee page beside it is dated November 24, and the platform lists only 11-25 games). Header NBA 美國職業籃球(3), all in view. Zoomed: handicaps 2.5 on DET (away), 10-50 on BOS (away), 8+50 on DEN; all totals 0.940/0.940; no moneylines",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-11-25T08:05:00+08:00",
+      "home": "ORL",
+      "away": "DET",
+      "handicap": {
+        "text": "2.5",
+        "row": "away",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大212-50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-25T09:05:00+08:00",
+      "home": "WAS",
+      "away": "BOS",
+      "handicap": {
+        "text": "10-50",
+        "row": "away",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大217.5",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-25T11:05:00+08:00",
+      "home": "DEN",
+      "away": "DAL",
+      "handicap": {
+        "text": "8+50",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大234+50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    }
+  ]
+}
