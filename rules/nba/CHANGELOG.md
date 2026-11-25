@@ -2,6 +2,15 @@
 
 Every change to `RULES.md` or `config.yaml`. A `CONFIRM` value changes only on Eric's explicit message (date recorded). An `UNVALIDATED` value changes only with evidence: source, N, date range, method, CI (RULES §17).
 
+## 0.6.13 · 2026-11-25
+
+- R-14.5: the US close now prices a ticket the way the pass did. Tier A when the close quotes every point the ticket needs; otherwise Tier B (R-6.4), the validated family pinned to the close's main line. Eric 2026-11-25: 「收盤 CLV改用 Tier B 換算」.
+  - Why: with Tier A only, the close rarely quotes the platform's line, so most spread and total sides had no `CLV_US`. Of the 58 `clv` rows written 2026-11-23 to 11-25, 36 had no value; every one of those was a spread or total. Recomputed from the snapshots still on disk, 22 of the 36 now have a Tier B value; the other 14 stay N/A, their close main line having fewer than 8 books.
+  - Same gates as the pass: the main line needs `anchor.consensus_min_books` books and must lie within `tiers.tier_b_max_gap` of every leg; a comparison that does not move one way (VALIDATION.md §5 L8), or a family that cannot be pinned, leaves CLV N/A. Moneylines stay Tier A.
+  - Applies to `track` and `settle` alike. Each new `clv` row (schema `bethero-nba-clv/2`) records `close_tier` A or B. Rows from 0.6.12 without a value are recomputed while their snapshot is on disk; the others stay N/A.
+  - Caveat: a Tier B CLV carries the translation's own error (σ_translate, R-12.3), so it is noisier than a Tier A one; the report does not mix them silently, since the tier is in each row.
+- Consequence for bets: none; CLV is measured after the bet and changes no gate, threshold or stake.
+
 ## 0.6.12 · 2026-11-23
 
 - R-14.3: every US close is now written to the ledger as a `clv` row, so `CLV_US` accumulates across sessions. Eric 2026-11-23: 「長期累積CLV」.

@@ -1,6 +1,6 @@
 # Bethero NBA Rulebook
 
-**Version 0.6.12 · 2026-11-23 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
+**Version 0.6.13 · 2026-11-25 · Approved by Eric 2026-10-21 (Phase 1); implemented in `src/bethero_nba` (Phase 2); validated in [`VALIDATION.md`](VALIDATION.md) (Phase 3, awaiting Eric's review)**
 
 Config: [`config.yaml`](config.yaml), cited as `cfg:section.key`. Changes: [`CHANGELOG.md`](CHANGELOG.md). Errors in Claude's own outputs: [`ERRATA.md`](../../ERRATA.md).
 
@@ -282,7 +282,7 @@ Confidence is informational; it never changes a stake.
 - **R-14.3** US close = the last US snapshot within `cfg:snapshots.close_snapshot_window_min` before tip. Tip has two readings, the board's and the Odds API commence time; the snapshot must fall within the window before both (the stricter reading, ERRATA E-014). Platform close = Eric's last screenshot before tip. Missing → CLV is N/A, never imputed.
   - Raw snapshots never leave `data/raw` (D5), and a cloud container loses them on restart. So after every US pull (`fetch odds`, `analyze --live`), each latest decision whose close is that snapshot gets a `clv` ledger row: `CLV_US`, the decision's sequence and hash, and the snapshot's time, SHA-256 and the game's commence time. Derived values only, never quotes. `python -m bethero_nba.track --record-clv` writes any missing ones from the snapshots on disk. The tracking report reads these rows first (Eric 2026-11-23: 「長期累積CLV」).
 - **R-14.4** `CLV_line` = P(cover | bet line) − P(cover | platform closing line), both under the US closing fair distribution. *Why:* the platform moves the line, not the price, so price CLV is structurally 0.
-- **R-14.5** `CLV_US` = EV of the bet ticket under the US closing fair distribution at the platform price, plus its change since bet time.
+- **R-14.5** `CLV_US` = EV of the bet ticket under the US closing fair distribution at the platform price, plus its change since bet time. The close prices the ticket the way the pass did (Eric 2026-11-25: 「收盤 CLV改用 Tier B 換算」): Tier A when the close quotes every needed point with `cfg:tiers.tier_a_min_books` books; otherwise Tier B (R-6.4), the validated family pinned to the close's main line, which needs `cfg:anchor.consensus_min_books` books and must lie within `cfg:tiers.tier_b_max_gap`. A comparison family that does not move one way (VALIDATION.md §5 L8), or a family that cannot be pinned, leaves CLV N/A. Each `clv` ledger row records the tier used.
 - **R-14.6** Weekly review on `cfg:clv.review_weekday` (Taipei): mean `CLV_line` and `CLV_US` with N and a date-block bootstrap CI; the bias monitor; veto hit-rate (CLV of vetoed versus non-vetoed candidates); reason-code counts; tier mix.
   - `python -m bethero_nba.track` covers the results part (Eric 2026-11-09: 「做成固定指令」). Every side the ledger priced counts once, as its latest decision for that game, market and side.
   - Above each EV threshold (default +1%, 0%, −1%, worst de-vig method) it gives the win rate (W ÷ (W + L), Wilson interval), the mean return and the mean `CLV_US` (date-block bootstrap, `cfg:bias.bootstrap`), with the reason-code counts and the tier mix.

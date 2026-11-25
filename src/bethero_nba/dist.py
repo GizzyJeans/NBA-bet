@@ -382,6 +382,16 @@ def load_families(path: Path | str) -> tuple[EmpiricalFamily, NormalFamily, dict
     return empirical, normal, data
 
 
+def tier_b_from_config(root: Path, cfg) -> "TierB | None":
+    """The Tier B provider as `analyze` builds it, or None while cfg:distribution.status is not
+    VALIDATED. Raises OSError or ValueError when the files disagree with the config."""
+    if cfg.get("distribution.status") != "VALIDATED":
+        return None
+    return load_tier_b(root / "data" / "dist", cfg.get("distribution.validated_markets"),
+                       cfg.get("distribution.selected_method"), cfg.get("distribution.smoothing_bandwidth"),
+                       cfg.get("distribution.comparison_fallback"))
+
+
 def load_tier_b(directory: Path | str, markets: Iterable[str], selected: dict[str, str],
                 bandwidths: dict[str, float] | None = None,
                 fallback: dict[str, str] | None = None) -> "TierB | None":

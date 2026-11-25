@@ -26,7 +26,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
-from . import boxscores, cli, clv, consensus, ledger, net, oddsapi, settle
+from . import boxscores, cli, clv, consensus, dist, ledger, net, oddsapi, settle
 from .bias import bootstrap
 from .teams import team
 
@@ -97,8 +97,9 @@ def stored_snapshots(raw_dir: Path) -> list[Snapshot]:
     return sorted(out, key=lambda s: s.retrieved_at)
 
 
-def _close(r: dict, snapshots: list[Snapshot], cfg) -> tuple[float, Snapshot, object] | None:
-    """CLV_US of one decision from the last snapshot in its close window (R-14.3, R-14.5)."""
+def _close(r: dict, snapshots: list[Snapshot], cfg, tier_b=None) -> tuple[float | None, Snapshot, object, str | None] | None:
+    """(CLV_US, snapshot, game, tier) of one decision from the last snapshot in its close window
+    (R-14.3, R-14.5); CLV_US is None when neither Tier A nor Tier B prices the ticket there."""
     window = cfg.get("snapshots.close_snapshot_window_min")
     tip = datetime.fromisoformat(r["game"]["tip"])
     for snap in reversed(snapshots):
@@ -111,8 +112,8 @@ def _close(r: dict, snapshots: list[Snapshot], cfg) -> tuple[float, Snapshot, ob
         gc = consensus.build(game, snap.retrieved_at, methods=tuple(cfg.get("anchor.devig_methods")),
                              max_age_min=cfg.get("anchor.us_quote_max_age_min"))
         legs = settle._legs(r)
-        value = clv.clv_us(legs, r["platform"]["price"], r["laying"], settle.close_cover(gc, r, legs, cfg), None)[0]
-        return value, snap, game
+        cover, tier = settle.close_cover_tiered(gc, r, legs, cfg, tier_b)
+        return clv.clv_us(legs, r["platform"]["price"], r["laying"], cover, None)[0], snap, game, tier
     return None
 
 
@@ -127,7 +128,8 @@ def recorded_clv(records: list[dict]) -> dict[str, dict]:
     return out
 
 
-def add_clv(sides: list[Side], snapshots: list[Snapshot], cfg, recorded: dict[str, dict] | None = None) -> None:
+def add_clv(sides: list[Side], snapshots: list[Snapshot], cfg, recorded: dict[str, dict] | None = None,
+            tier_b=None) -> None:
     """CLV_US from the ledger's `clv` records, else from a snapshot stored on this machine."""
     recorded = recorded or {}
     for s in sides:
@@ -135,43 +137,53 @@ def add_clv(sides: list[Side], snapshots: list[Snapshot], cfg, recorded: dict[st
         if rec is not None:
             s.clv_us = rec["clv_us"]
             continue
-        found = _close(s.record, snapshots, cfg)
+        found = _close(s.record, snapshots, cfg, tier_b)
         if found is not None:
             s.clv_us = found[0]
 
 
-def clv_records(records: list[dict], snapshots: list[Snapshot], cfg) -> list[dict]:
+def clv_records(records: list[dict], snapshots: list[Snapshot], cfg, tier_b=None) -> list[dict]:
     """New `clv` ledger payloads: each latest decision whose close is among these snapshots and not yet recorded.
 
     Only derived values go in (CLV_US, times, the snapshot's SHA-256), never quotes: the raw
     responses may not be redistributed (D5), so they stay in data/raw. `clv_us` is None when
-    the close was found but does not quote every point the ticket needs (settle.close_cover)."""
-    done = {(r["decision_hash"], r["close"]["snapshot_sha256"]) for r in records if r.get("record_type") == "clv"}
+    the close prices the ticket neither directly (Tier A) nor by translation (Tier B). A row
+    without a value from before Tier B pricing (schema /1) is retried while its snapshot exists."""
+    done = {(r["decision_hash"], r["close"]["snapshot_sha256"]) for r in records if r.get("record_type") == "clv"
+            and (r["clv_us"] is not None or r.get("schema") != "bethero-nba-clv/1")}
     out = []
     for s in latest_sides(records):
         r = s.record
         if "record_hash" not in r:
             continue
-        found = _close(r, snapshots, cfg)
+        found = _close(r, snapshots, cfg, tier_b)
         if found is None:
             continue
-        value, snap, game = found
+        value, snap, game, tier = found
         sha = net.load_cached(snap.path).sha256
         if (r["record_hash"], sha) in done:
             continue
-        out.append({"record_type": "clv", "schema": "bethero-nba-clv/1", "game": r["game"],
+        out.append({"record_type": "clv", "schema": "bethero-nba-clv/2", "game": r["game"],
                     "market": r["market"], "side": r["side"], "decision_sequence": r["sequence"],
-                    "decision_hash": r["record_hash"], "clv_us": value,
+                    "decision_hash": r["record_hash"], "clv_us": value, "close_tier": tier,
                     "close": {"retrieved_at": snap.retrieved_at.isoformat(), "snapshot_sha256": sha,
                               "commence_time": game.commence_time.isoformat(),
                               "window_min": cfg.get("snapshots.close_snapshot_window_min")}})
     return out
 
 
+def _tier_b(root: Path, cfg):
+    try:
+        return dist.tier_b_from_config(root, cfg)
+    except (OSError, ValueError) as exc:          # fail closed: Tier A closes only
+        print(f"Tier B off: {exc}")
+        return None
+
+
 def record_clv(root: Path, cfg) -> int:
     """Append the closes found among this machine's snapshots to the ledger; returns how many."""
     path = root / "logs" / "ledger.jsonl"
-    payloads = clv_records(ledger.verify(path), stored_snapshots(root / "data" / "raw"), cfg)
+    payloads = clv_records(ledger.verify(path), stored_snapshots(root / "data" / "raw"), cfg, _tier_b(root, cfg))
     if payloads:
         ledger.append(path, payloads)
     return len(payloads)
@@ -371,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
     settle_sides(sides, scores.finals)
     snapshots = stored_snapshots(root / "data" / "raw")
     recorded = recorded_clv(records)
-    add_clv(sides, snapshots, cfg, recorded)
+    add_clv(sides, snapshots, cfg, recorded, _tier_b(root, cfg))
     now = datetime.fromisoformat(args.now) if args.now else datetime.now(timezone.utc)
     text = render(sides, scores, args.thresholds, cfg, now, len(snapshots),
                   sum(recorded.get(s.record.get("record_hash", ""), {}).get("clv_us") is not None for s in sides))

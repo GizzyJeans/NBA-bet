@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
-from . import cli, clv, consensus, ledger, net, oddsapi
+from . import cli, clv, consensus, dist, edge, ledger, net, oddsapi
 from .odds import Leg, expected_value, needed_points, ticket_outcomes
 from .platform import load_board
 from .teams import team
@@ -96,12 +96,41 @@ def close_in_window(retrieved_at: datetime, tips: Iterable[datetime], window_min
     return max(tips) - timedelta(minutes=window_min) <= retrieved_at < min(tips)
 
 
-def close_cover(gc: consensus.GameConsensus, record: dict, legs, cfg):
-    """US close cover function if every needed point is quoted at the close, else None."""
+def close_cover(gc: consensus.GameConsensus, record: dict, legs, cfg, tier_b=None):
+    """US close cover function, or None (R-14.3, R-14.5); see `close_cover_tiered`."""
+    return close_cover_tiered(gc, record, legs, cfg, tier_b)[0]
+
+
+def close_cover_tiered(gc: consensus.GameConsensus, record: dict, legs, cfg, tier_b=None):
+    """(cover, tier) under the US close, priced the way the pass priced the ticket (R-14.5).
+
+    Tier A when the close quotes every point the ticket needs with enough books. Otherwise
+    Tier B, as in the pass (Eric 2026-11-25: 「收盤 CLV改用 Tier B 換算」): the validated family
+    pinned to the close's main line, which needs `anchor.consensus_min_books` books and must
+    lie within `tiers.tier_b_max_gap` of every leg; a comparison family that does not move one
+    way (VALIDATION.md §5 L8) or a family that cannot be pinned leaves it N/A. (None, None)
+    when neither applies; never imputed."""
     market, giver = US_MARKET[record["market"]], _giver(record)
     method = record["worst_method"]
     cover = gc.cover(market, giver, method, cfg.get("tiers.tier_a_min_books"))
-    return cover if all(cover(x) is not None for x in needed_points(legs)) else None
+    if all(cover(x) is not None for x in needed_points(legs)):
+        return cover, "A"
+    if (tier_b is None or market == "h2h" or cfg.get("distribution.status") != "VALIDATED"
+            or market not in (cfg.get("distribution.validated_markets") or ())):
+        return None, None
+    l_ref = gc.l_ref(market)
+    ref = gc.line(market, l_ref)
+    if ref is None or ref.n_books < cfg.get("anchor.consensus_min_books"):
+        return None, None
+    ref_giving = edge._to_giving(market, giver, -l_ref if market == "spreads" else l_ref)
+    scale = "total" if record["market"] == "total" else "spread"
+    if max(abs(leg.line - ref_giving) for leg in legs) > cfg.get(f"tiers.tier_b_max_gap.{scale}"):
+        return None, None
+    try:
+        anchored, _ = tier_b.anchored(market, l_ref, ref.probs[method])
+    except ValueError:                      # includes dist.NotOneWay
+        return None, None
+    return edge._giving_cover(market, giver, anchored.cover), "B"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -127,6 +156,11 @@ def main(argv: list[str] | None = None) -> int:
         fetched = net.load_cached(args.close_odds)
         close_games, close_ts = oddsapi.normalise(fetched.json()), fetched.retrieved_at
     close_board = load_board(args.close_board) if args.close_board else None
+    try:
+        tier_b = dist.tier_b_from_config(root, cfg)
+    except (OSError, ValueError) as exc:          # fail closed: CLV only where the close quotes the line
+        print(f"Tier B off: {exc}")
+        tier_b = None
 
     rows, clv_values = [], []
     for bet in bets:
@@ -151,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
         if game is not None:
             gc = consensus.build(game, close_ts, methods=tuple(cfg.get("anchor.devig_methods")),
                                  max_age_min=cfg.get("anchor.us_quote_max_age_min"))
-            cover = close_cover(gc, bet, legs, cfg)
+            cover = close_cover(gc, bet, legs, cfg, tier_b)
             if cover is not None:
                 clv_us, _ = clv.clv_us(legs, bet["platform"]["price"], bet["laying"], cover,
                                        bet["ev"].get(bet["worst_method"]))
@@ -162,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
                     if market is not None and market.line is not None and market.line.legs:
                         close_legs = market.line.legs
                         cover_both = close_cover(gc, {**bet, "platform": {**bet["platform"], "legs":
-                                                      [[l.line, l.weight] for l in close_legs]}}, close_legs, cfg)
+                                                      [[l.line, l.weight] for l in close_legs]}}, close_legs, cfg, tier_b)
                         if cover_both is not None:
                             clv_line = clv.clv_line(legs, close_legs, bet["platform"]["price"], bet["laying"], cover)
         board_path = (bet.get("pass") or {}).get("board", {}).get("path")

@@ -153,3 +153,22 @@ def test_record_clv_command(root, tmp_path):
     assert track.main(["--root", str(tmp_path), "--record-clv"]) == 0
     rows = [r for r in ledger.verify(tmp_path / "logs" / "ledger.jsonl") if r["record_type"] == "clv"]
     assert len(rows) == 6
+
+
+def test_close_falls_back_to_tier_b_like_the_pass(cfg):
+    from bethero_nba import settle
+    from tests.helpers import HypotheticalTierB, game_consensus, us_game, with_values
+    validated = with_values(cfg, **{"distribution.status": "VALIDATED",
+                                    "distribution.validated_markets": ["spreads", "totals"]})
+    gc = game_consensus(us_game(), validated)                  # US main line: home −5.5 only
+    record = decision("handicap", "home", True, [[5.0, 1.0]], 0.95, 0.01, "5")
+    legs = settle._legs(record)
+    assert settle.close_cover_tiered(gc, record, legs, validated) == (None, None)           # no Tier B: N/A
+    unvalidated = with_values(cfg, **{"distribution.status": "UNVALIDATED"})
+    assert settle.close_cover_tiered(gc, record, legs, unvalidated, HypotheticalTierB()) == (None, None)
+    cover, tier = settle.close_cover_tiered(gc, record, legs, validated, HypotheticalTierB())
+    assert tier == "B" and 0 < cover(5.0) < 1
+    far = decision("handicap", "home", True, [[8.0, 1.0]], 0.95, 0.01, "8")                # 2.5 from −5.5
+    assert settle.close_cover_tiered(gc, far, settle._legs(far), validated, HypotheticalTierB()) == (None, None)
+    direct = decision("handicap", "home", True, [[5.5, 1.0]], 0.95, 0.01, "5.5")
+    assert settle.close_cover_tiered(gc, direct, settle._legs(direct), validated, HypotheticalTierB())[1] == "A"
