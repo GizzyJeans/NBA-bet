@@ -1,0 +1,52 @@
+{
+  "schema": "bethero-nba-board/1",
+  "slate_et": "2026-11-25",
+  "platform_ts": "2026-11-26T10:47:00+08:00",
+  "ts_source": "screenshot_clock",
+  "source": "Eric's platform screenshot, phone clock 10:47 (12-hour display; 10:47 Taipei on 11-26: the image arrived at 10:48, before the 11:05 tips; it came with a re-send of the 23:16 screenshot). Header NBA 美國職業籃球(2): the two 11:05 games. The platform prints SAN for SAS. Handicaps 3-75 on SAN (away; was 3平), 9+75 on GSW (was 6.5); totals 225+50 and 216+50 at 0.940/0.940; moneyline SAN 0.650 / POR 1.220, none on SAC@GSW. Not analysed: the UTC 11-26 Odds API budget was spent on closes (ERRATA E-015)",
+  "transcribed_by": "Claude",
+  "games": [
+    {
+      "tip": "2026-11-26T11:05:00+08:00",
+      "home": "POR",
+      "away": "SAS",
+      "handicap": {
+        "text": "3-75",
+        "row": "away",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大225+50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": 1.22,
+        "price_away": 0.65
+      },
+      "unresolved": []
+    },
+    {
+      "tip": "2026-11-26T11:05:00+08:00",
+      "home": "GSW",
+      "away": "SAC",
+      "handicap": {
+        "text": "9+75",
+        "row": "home",
+        "price_home": 0.95,
+        "price_away": 0.95
+      },
+      "total": {
+        "text": "大216+50",
+        "price_over": 0.94,
+        "price_under": 0.94
+      },
+      "moneyline": {
+        "price_home": "-",
+        "price_away": "-"
+      },
+      "unresolved": []
+    }
+  ]
+}
