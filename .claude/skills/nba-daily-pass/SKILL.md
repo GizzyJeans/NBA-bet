@@ -59,6 +59,7 @@ py -m bethero_nba.analyze --board <board.json> --live --injury-pdf <pdf>
 ## 4. Close and settle
 
 - **Close.** Near the main tip window, run `py -m bethero_nba.fetch odds --live`; it uses the day's second pull. Ask Eric for a last pre-tip screenshot if he can take one.
+  - While any game of the slate is still to tip, keep one pull of that UTC day in reserve for a final pass on it (Eric may send a late screenshot), unless he says he will not (ERRATA E-015).
 - **Settle within 3 days**, because the scores endpoint only reaches back 3 days:
 
   ```powershell

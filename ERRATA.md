@@ -120,3 +120,10 @@ Errors found in Claude's own earlier outputs for this project: what was wrong, i
   - Of the two close pulls so far, 2026-11-03 00:19 UTC was outside the window (15.6 minutes before the platform tip) and would have been used.
   - 2026-11-05 00:26 UTC is inside it for all three games it was timed for.
 - **Fix:** `settle.close_in_window`, with tests; R-14.3 states the reading (RULES 0.6.9).
+
+## E-015 · 2026-11-26 · Daily workflow: all three UTC 11-26 Odds API pulls spent on closes
+
+- **Wrong:** on 2026-11-25 Claude scheduled close pulls for 08:05, 08:35 and 09:05 Taipei on 11-26, using all three UTC 11-26 pulls, and told Eric the day's budget had no other use because no 11-26 ET slate was expected. That missed a late screenshot for the same slate's 11:05 games, which Eric has sent before (2026-11-18 10:45).
+- **Correct:** while any game of a slate is still to tip, the UTC day keeps one pull in reserve for a final pass on it, unless Eric says he will not send one.
+- **Impact:** SAS@POR and SAC@GSW (2026-11-25 ET slate) got no final pass. Eric's 10:47 screenshot (GSW 6.5 → 9+75, SAS 3平 → 3-75) is committed as evidence but unpriced; their last decisions are the 10:00 AM ET preliminary pass, all NB-STATUS or NB-NOT-OFFERED. No shadow bet was possible for those two games. The stored 00:58 UTC snapshot was not used: it is 1 h 49 min older than the screenshot, so the pass would be stale (R-4.3). In exchange the 08:05 close (CHI@CHA, 6 `clv` rows) was taken.
+- **Fix:** `.claude/skills/nba-daily-pass` now says to keep that reserve when scheduling close pulls.
